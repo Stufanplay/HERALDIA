@@ -81,7 +81,9 @@ def filler(th, rng, name, kind):
                 t.set(x, 1, z, th["fence"])
         for z in range(1, 8):
             t.set(0, 1, z, th["fence"]); t.set(W - 1, 1, z, th["fence"])
-        t.set(c, 1, 1, f"{th['gate']}[facing=north,open=false]")
+        # the gate stands open: villagers never open a gate, and one that got in (seen in village_routes: a villager
+        # shut in a garden day after day, without a bed) had no way out with it shut
+        t.set(c, 1, 1, f"{th['gate']}[facing=north,open=true]")
         flowers = [p for p in th["plants"] if not p.endswith("_pot") and p != "sweet_berry_bush"] or ["poppy", "dandelion"]
         for x in range(1, W - 1):
             for z in range(2, 7):
