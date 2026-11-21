@@ -237,3 +237,87 @@ def trap_walk(t):
                 break
         out.append((bed, worst[1], round(worst[0], 1)))
     return out
+
+
+def _ladder_columns(t):
+    """[(x, z, y0, y1)]: each run of ladders stacked in a column of the template (as written, before _no_ladders)."""
+    cells = sorted(p for p, (st, _) in t.blocks.items() if _name(st) == "ladder")
+    runs, seen = [], set()
+    for x, y, z in cells:
+        if (x, y, z) in seen:
+            continue
+        y1 = y
+        while (x, y1 + 1, z) in t.blocks and _name(t.blocks[(x, y1 + 1, z)][0]) == "ladder":
+            y1 += 1
+        seen.update((x, yy, z) for yy in range(y, y1 + 1))
+        runs.append((x, z, y, y1))
+    return runs
+
+
+def stranded(t):
+    """[(cell, ladder)]: cells a villager can get to (walking, and climbing a ladder, which it does by just walking into
+    one; its path search never uses ladders) from which its search finds no way back to a bed the inhabitants use: up
+    there it cannot get home or to work, and after 1,200 ticks the game makes it give both up. Seen in CI: the hunters'
+    lodge's two inhabitants on top of its lookout, 4 blocks above the ground (a search allows drops of 3 at most)."""
+    from . import _inhabitants as inh
+    g = Ground(t)
+    # the beds an inhabitant can use: those its search reaches from where the inhabitants spawn (a bed up a ladder is
+    # not one: the watchtower's upper bed, which its search never claims)
+    spawn = [tuple(int(v // 1) for v in (x, y, z)) for x, y, z, n in t.entities
+             if n["id"] == "minecraft:villager" and inh.is_inhabitant(n)]
+    ground, todo = set(), [c for x, y, z in spawn for c in ((x, y, z), (x, y + 1, z)) if g.floor(*c) is not None]
+    ground.update(todo)
+    while todo:
+        for m in g.neighbors(todo.pop()):
+            if m not in ground:
+                ground.add(m)
+                todo.append(m)
+    targets = {c for b in beds(t) for c in _beside(g, b) if c in ground}
+    if not targets:
+        return []
+    ladders = _ladder_columns(t)
+    # the cells at each ladder: the ladder cells themselves and those beside them, at any height of the run (+1)
+    landing = []
+    for x, z, y0, y1 in ladders:
+        cs = set()
+        for y in range(y0, y1 + 2):
+            for dx, dz in ((0, 0), (1, 0), (-1, 0), (0, 1), (0, -1)):
+                for dy in (0, 1):
+                    c = (x + dx, y + dy, z + dz)
+                    if g.floor(*c) is not None:
+                        cs.add(c)
+        landing.append(((x, z, y0, y1), cs))
+    # where a villager physically gets: walking from the beds, plus up and down every ladder it reaches
+    reach, todo = set(targets), list(targets)
+    while todo:
+        n = todo.pop()
+        nxt = list(g.neighbors(n))
+        for _, cs in landing:
+            if n in cs:
+                nxt += cs
+        for m in nxt:
+            if m not in reach:
+                reach.add(m)
+                todo.append(m)
+    # from where its search gets back to a bed: backwards over the search's own moves (no ladders)
+    back = {}
+    for n in reach:
+        for m in g.neighbors(n):
+            back.setdefault(m, []).append(n)
+    home, todo = set(targets), list(targets)
+    while todo:
+        n = todo.pop()
+        for m in back.get(n, ()):
+            if m not in home:
+                home.add(m)
+                todo.append(m)
+    out = []
+    for lad, cs in landing:
+        for c in sorted(reach - home):
+            out.append((c, lad))
+    seen, res = set(), []
+    for c, lad in out:
+        if c not in seen:
+            seen.add(c)
+            res.append((c, lad))
+    return res

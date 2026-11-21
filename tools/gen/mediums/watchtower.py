@@ -123,7 +123,10 @@ def lower(p, name):
     _courtyard(t, p)
     m = p["madera"]
     _tower(t, p, 2, deck=False)
-    c.bed(t, X1 - 1, Z1 - 1, "east", "brown")
+    # the bed along the east wall, its foot clear of the ladder, and the ladder's foot shut behind a fence gate: a lookout
+    # who climbed it had no way down to his bed and workstation (mediums/_paths.stranded)
+    c.bed(t, X1 - 1, Z1 - 1, "south", "brown")
+    c.ladder_closet(t, CX, 1, Z1 - 1, m, p["tronco"], {(0, -1): "gate", (-1, 0): "post", (1, 0): "post"})
     t.set(X1 - 1, 1, Z0 + 1, "fletching_table")
     inh.bell(t, CX - 4, 2)                                    # the alarm bell by the gate: the lookout's meeting point
     t.entity(X0 + 2, 1, 8, inh.villager(MID, "vigilante", "Vigía", "fletcher", p["aldeano"], lookout_offers(), rot=180.0))
