@@ -496,6 +496,119 @@ def lanes(t):
     return len(done)
 
 
+TREE_ROOM = 3        # a tree stands where the lawn is bare this far round its trunk (its crown is 5 x 5)
+TREE_APART = 8       # and no closer than this to another
+TREES = (("oak_log[axis=y]", "oak_leaves[persistent=true,distance=1,waterlogged=false]"),
+         ("birch_log[axis=y]", "birch_leaves[persistent=true,distance=1,waterlogged=false]"))
+
+
+def _lawn(t):
+    """The bare lawn inside the wall: grass at ground level with nothing over it up to the sky."""
+    hh = _hh()
+    F = hh.FLOOR
+    return {(x, z) for x in range(hh.WALL_T, hh.N - hh.WALL_T) for z in range(hh.WALL_T, hh.SOUTH)
+            if _name(t.get(x, F, z)) == "grass_block"
+            and all(_name(t.get(x, y, z)) == "air" for y in range(F + 1, hh.HEIGHT))}
+
+
+def trees(t):
+    """Real trees on the town's widest lawns: each where the grass is bare TREE_ROOM blocks round the trunk, the ones
+    with most room first, none within TREE_APART of another. They burn, as trees do: herald_house.fire_errors proves
+    that a fire in one reaches nothing of the town that burns, and its errors() only lets wood and leaves stand where
+    this function put them (t.trees). The trunk stands in a pit of rooted dirt and coarse dirt, so that the tree has
+    soil when the land's own ground (sand, gravel) takes the lawn's place. Returns the trunks' (x, z)."""
+    hh = _hh()
+    F = hh.FLOOR
+    lawn = _lawn(t)
+    room = {}
+    for (x, z) in lawn:
+        r = 0
+        while r < 9 and all((x + a, z + b) in lawn for a in range(-r - 1, r + 2) for b in range(-r - 1, r + 2)):
+            r += 1
+        room[(x, z)] = r
+    picked = []
+    for (x, z) in sorted((c for c in lawn if room[c] >= TREE_ROOM), key=lambda c: (-room[c], hh._h(c[0], 11, c[1]))):
+        if all(max(abs(x - px), abs(z - pz)) >= TREE_APART for px, pz in picked):
+            picked.append((x, z))
+    t.trees = set()
+    for i, (x, z) in enumerate(picked):
+        log, leaves = TREES[hh._h(x, 13, z) % len(TREES)]
+        tall = 5 + hh._h(x, 17, z) % 3
+        t.set(x, F, z, "rooted_dirt")
+        for dx, dz in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            t.set(x + dx, F, z + dz, "coarse_dirt")
+        for y in range(F + 1, F + 1 + tall):
+            t.set(x, y, z, log)
+            t.trees.add((x, y, z))
+        top = F + tall
+        for dy, r in ((-1, 2), (0, 2), (1, 1), (2, 1)):
+            for dx in range(-r, r + 1):
+                for dz in range(-r, r + 1):
+                    if r == 2 and abs(dx) == 2 and abs(dz) == 2 and (dy == 0 or hh._h(x + dx, top + dy, z + dz) % 2):
+                        continue            # the crown's corners, cut unevenly
+                    if dy == 2 and dx and dz:
+                        continue
+                    q = (x + dx, top + dy, z + dz)
+                    if _name(t.get(*q)) == "air":
+                        t.set(*q, leaves)
+                        t.trees.add(q)
+    return picked
+
+
+HEDGE = ("azalea_leaves[persistent=true,distance=1,waterlogged=false]",
+         "flowering_azalea_leaves[persistent=true,distance=1,waterlogged=false]",
+         "oak_leaves[persistent=true,distance=1,waterlogged=false]")
+POTS = ("potted_fern", "potted_azalea_bush", "potted_flowering_azalea_bush", "potted_red_tulip", "potted_oxeye_daisy",
+        "potted_cornflower", "potted_dead_bush", "potted_cactus")
+HEDGE_CLEAR = 6      # a hedge found to carry fire to something that burns is cleared this far round that block
+
+
+def hedges(t, blds):
+    """Planting at the foot of the houses: low hedges (one block of leaves) against a wall, in runs with gaps, and a
+    potted plant here and there in a run. Only on bare lawn beside a building's wall, never beside a path, a lane or a
+    door's way out, so nobody's walk changes. Leaves burn: a run that would carry a fire started by lightning to
+    anything that burns indoors is taken out again (herald_house.fire_errors, until it reports nothing). Returns
+    (hedge cells, pots)."""
+    hh = _hh()
+    F = hh.FLOOR
+    lawn = {(x, z) for x in range(hh.WALL_T, hh.N - hh.WALL_T) for z in range(hh.WALL_T, hh.SOUTH)
+            if _name(t.get(x, F, z)) == "grass_block" and _name(t.get(x, F + 1, z)) == "air"
+            and _name(t.get(x, F + 2, z)) == "air"}          # under an eave too: that is where a house is planted
+    plots = {(x, z) for b in blds for x in range(b.x0, b.x1 + 1) for z in range(b.z0, b.z1 + 1)}
+    ways = {c for _, start, cells in t.paths for c in [start] + list(cells or ())}
+    side = ((1, 0), (-1, 0), (0, 1), (0, -1))
+    spots = []
+    for (x, z) in sorted(lawn):
+        if any(max(abs(x - wx), abs(z - wz)) <= 2 for wx, wz in ways):
+            continue
+        walls = [(x + dx, z + dz) for dx, dz in side if (x + dx, z + dz) in plots
+                 and not t.is_free(x + dx, F + 1, z + dz) and not t.is_free(x + dx, F + 2, z + dz)]
+        if not walls or any((x + dx, z + dz) not in lawn and (x + dx, z + dz) not in walls for dx, dz in side):
+            continue
+        if _noise(x * 3, z * 3, 23) > 0.42:
+            spots.append((x, z))
+    pots = [c for c in spots if hh._h(c[0], 29, c[1]) % 6 == 0]
+    green = [c for c in spots if c not in pots]
+    for x, z in green:
+        t.set(x, F + 1, z, HEDGE[int(_noise(x, z, 31) * 2.99)])
+        t.trees.add((x, F + 1, z))
+    for x, z in pots:
+        t.set(x, F + 1, z, POTS[hh._h(x, 37, z) % len(POTS)])
+    for _ in range(8):
+        bad = hh.fire_errors(t)
+        if not bad:
+            break
+        import re
+        for line in bad:
+            bx, by, bz = (int(v) for v in re.search(r"at \((-?\d+), (-?\d+), (-?\d+)\)", line).groups())
+            for x, z in list(green):
+                if max(abs(x - bx), abs(z - bz)) <= HEDGE_CLEAR:
+                    green.remove((x, z))
+                    t.set(x, F + 1, z, "air")
+                    t.trees.discard((x, F + 1, z))
+    return green, pots
+
+
 def dress(t, blds):
     forecourt(t)
     wall(t, blds)

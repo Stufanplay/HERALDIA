@@ -18,6 +18,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.tags.BlockTags;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.ExperienceOrb;
 import net.minecraft.world.entity.Mob;
@@ -309,6 +310,39 @@ final class Building {
 		t.placeInWorld(level, origin, origin, Placing.dry(new StructurePlaceSettings().setBoundingBox(bb).setIgnoreEntities(false)
 				.setFinalizeEntities(false)), level.getRandom(), FLAGS);
 		exterior(level, g, bb);
+		interior(level, g, bb);
+	}
+
+	/**
+	 * Inside the wall too, the town stands on the land's own ground: off grassland the template's lawn takes the land's
+	 * surface (sand in a desert, red sand on badlands, gravel on stone, mud in a swamp), wherever nothing that grows
+	 * stands on it. The crops keep their farmland. On sand a flower has no soil to live on: its bed becomes a dry garden
+	 * (a dead bush in one bed of three, bare sand in the others). On grassland nothing changes.
+	 */
+	private static void interior(ServerLevel level, Grounds g, BoundingBox bb) {
+		RoadProfile.Ground kind = dominant();
+		if (kind == RoadProfile.Ground.DIRT) {
+			return;
+		}
+		boolean dry = kind == RoadProfile.Ground.SAND || kind == RoadProfile.Ground.RED;
+		BlockState surface = surface(kind), air = Blocks.AIR.defaultBlockState(), bush = Blocks.DEAD_BUSH.defaultBlockState();
+		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+		int y = g.groundY();
+		for (int x = bb.minX(); x <= bb.maxX(); x++) {
+			for (int z = bb.minZ(); z <= bb.maxZ(); z++) {
+				if (!level.getBlockState(pos.set(x, y, z)).is(Blocks.GRASS_BLOCK)) {
+					continue;
+				}
+				BlockState over = level.getBlockState(pos.set(x, y + 1, z));
+				if (over.is(BlockTags.FLOWERS) || over.is(BlockTags.SAPLINGS) || over.is(BlockTags.CROPS)) {
+					if (!dry || !over.is(BlockTags.SMALL_FLOWERS)) {
+						continue;       // it keeps its soil
+					}
+					level.setBlock(pos, Math.floorMod(x * 73856093 ^ z * 83492791, 3) == 0 ? bush : air, FLAGS);
+				}
+				level.setBlock(pos.set(x, y, z), surface, FLAGS);
+			}
+		}
 	}
 
 	/**
