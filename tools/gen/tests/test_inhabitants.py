@@ -282,3 +282,18 @@ def test_no_inhabitant_is_stranded_up_a_ladder(reg):
         assert t.blocks[gate][0].split("[")[0].endswith("_fence_gate"), name
         opened = edited(t, {p: None for p in [gate] + posts})
         assert _paths.stranded(opened), name
+
+
+def test_the_watermill_has_no_trap(reg):
+    """The watermill's house (mill a) gets a back door by the miller's bed: with the north door alone a miller coming home
+    from the south stopped against that wall 24.4 blocks' walk from his bed, 0.6 under mediums/_paths.TRAP_WALK_MAX (on a
+    server he still got home, 24 of 24, before and after; the door is for the margin). With it there is no trap: from
+    that cell the bed is 5 blocks' walk, within one search."""
+    from mediums import _paths
+    for style in ("llanura", "pantano"):
+        t = reg.templates[f"medianas/molino/{style}/a"]
+        assert [w for _, _, w in _paths.trap_walk(t)] == [0.0], style
+    t = reg.templates["medianas/molino/llanura/a"]
+    g = _paths.Ground(t)
+    assert round(_paths.walks(g, (4, 1, 12))[(4, 1, 14)], 1) == 5.0
+    assert _paths.find_path(g, (4, 1, 14), (4, 1, 12))[0]
