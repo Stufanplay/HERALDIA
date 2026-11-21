@@ -60,6 +60,10 @@ CONFIG_LOG = [
 # With 12 cells (the 4 touching 0,0 and their 8 cross neighbours, of 94 chunks), every village ends up within 2 x 94 x 16 blocks.
 LOCATE_LIMIT = 2 * 94 * 16
 DOWNLOAD_ATTEMPTS = 4         # a download cut off by the network (seen with Fabric API) is repeated
+# Incomplete in both directions, and knowing which matters when writing an `ok` pattern: a success text holding one
+# of these words ends the wait too soon (see LESSONS), and an error text holding none of them does not end it at all --
+# `data get entity` with a selector that could match more than one answers `Only one entity is allowed, but the
+# provided selector allows more than one`, so the wait ran its full COMMAND_TIMEOUT_S. Measured on a dedicated server.
 ERROR_PATTERN = r"Unknown|Incorrect|Failed|Invalid|error|not loaded"
 # /heraldia info nearby: (point, radius); the last one, with the maximum radius, measures the worst case. The search runs off the
 # server thread; on it only the confirmation (INFO_MAIN_MS at most). INFO_MAX_MS is the cap for the full response.
