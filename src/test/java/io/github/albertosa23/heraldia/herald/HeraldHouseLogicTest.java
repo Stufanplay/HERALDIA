@@ -17,6 +17,53 @@ class HeraldHouseLogicTest {
 	private static final HousePlan PLAN = HousePlan.fromJar();
 	private static final Grounds G = new Grounds(1000, 60, -2000, PLAN);
 
+	/**
+	 * The chunks a stretch of one gate's road needs loaded before it is laid (herald/Building.roadChunks): every chunk the
+	 * stretch's own columns fall in, its verges and the signpost's column included, for each of the four gates; and the
+	 * stretches of the whole ring leave no chunk of the walk out. Before the road was laid a stretch at a time it walked
+	 * the whole ring in one step and generated the land under it on the server thread (168-233 ms there).
+	 */
+	@Test
+	void everyChunkOfARoadStretchIsAskedForBeforeItIsLaid() {
+		int[] across = PLAN.road();
+		for (String side : PLAN.gates().keySet()) {
+			net.minecraft.core.Direction d = net.minecraft.core.Direction.byName(side);
+			assertNotNull(d, side);
+			int[] gate = PLAN.gates().get(side);
+			int gx = G.ox() + gate[0], gz = G.oz() + gate[1];
+			java.util.Set<Long> whole = new java.util.HashSet<>();
+			for (int from = 1; from <= Grounds.RING; from += Building.ROAD_RUN) {
+				int to = Math.min(from + Building.ROAD_RUN - 1, Grounds.RING);
+				java.util.List<Long> got = new java.util.ArrayList<>();
+				Building.roadChunks(G, side, from, to, got);
+				// the columns the stretch really reads: the one straight out of the gate (its height and its water), the
+				// road's own width, and the signpost's column one past it
+				java.util.Set<Integer> offsets = new java.util.HashSet<>(java.util.List.of(0, across[1] + 1));
+				for (int a = across[0]; a <= across[1]; a++) {
+					offsets.add(a);
+				}
+				java.util.Set<Long> want = new java.util.HashSet<>();
+				for (int step = from; step <= to; step++) {
+					for (int a : offsets) {
+						int x = gx + d.getStepX() * step + (d.getAxis() == net.minecraft.core.Direction.Axis.Z ? a : 0);
+						int z = gz + d.getStepZ() * step + (d.getAxis() == net.minecraft.core.Direction.Axis.X ? a : 0);
+						want.add(net.minecraft.world.level.ChunkPos.pack(x >> 4, z >> 4));
+					}
+				}
+				assertTrue(new java.util.HashSet<>(got).containsAll(want), side + " " + from + "-" + to + ": " + got + " misses one of " + want);
+				whole.addAll(got);
+			}
+			for (int step = 1; step <= Grounds.RING; step++) {
+				int x = gx + d.getStepX() * step, z = gz + d.getStepZ() * step;
+				assertTrue(whole.contains(net.minecraft.world.level.ChunkPos.pack(x >> 4, z >> 4)),
+						side + ": the chunk of the block " + step + " out of the gate is in no stretch");
+			}
+		}
+		java.util.List<Long> one = new java.util.ArrayList<>();
+		Building.box(one, -17, -1, -16, 0);                 // a box over four chunks, across x = -16 and z = 0
+		assertEquals(4, new java.util.HashSet<>(one).size(), "a box that straddles both chunk borders is four chunks");
+	}
+
 	@Test
 	void blueprintFromTheJar() {
 		assertEquals(128, PLAN.size()[0]);

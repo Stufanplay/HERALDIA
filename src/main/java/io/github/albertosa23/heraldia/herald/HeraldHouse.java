@@ -425,6 +425,7 @@ public final class HeraldHouse {
 			LOGGER.info("Heraldia: herald's house: disabled ({} = false)", ENABLED);
 			return;
 		}
+		Building.warmUp(ow);                 // the first villager costs 78 ms: not inside a step of the town's build
 		s.origin().ifPresent(o -> load(ow, o, s.version()));
 		if (s.origin().isEmpty() && !s.decided()) {
 			boolean fresh = ow.getGameTime() < NEW_WORLD_TICKS;
