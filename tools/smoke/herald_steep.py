@@ -13,15 +13,16 @@ One world (the owner's seed, large biomes, hard; the arena off), then:
      grounds are built on their own;
   3. the log: the town settled the pond (drained what its template and margin left open), the roads' audit has no step of
      more than one block, the grounds' audit has no water standing in the air, no loose column or hole, at most
-     RAMP_SHARE of its columns in ramps and STEP_SHARE in bare steps, and no step over SLOW_MS ms on the server thread;
+     RAMP_SHARE of its columns in ramps and STEP_SHARE in bare steps, and no step over SLOW_MS ms on the server thread
+     in the town's own build (herald/Building), in its roads or in its grounds: the same cap for all three, because a
+     step is a tick and a tick of the town is as long a freeze for the player as a tick of the grounds;
   4. the world read back (the server stopped): no block of the town waterlogged where its template is not (the pond the
      town cuts into filled its own walls, stairs, slabs and lanterns, and nothing runs out of them until the first block
      update beside them: no measure of water sees it in a fresh world); in the footprint, its margin and the ring, no
      block of water with air beside or under it; in the ring, at most RAMP_SHARE of the natural columns' one-block steps
      in ramps (RAMP or more the same way, each within RAMP_GAP columns of the next) and at most STEP_SHARE bare steps
      (more than one block, the higher side not a retaining wall); on every road, no two side by side paved columns more
-     than a block apart.
-Exit code 0 if everything passes.
+     than a block apart.Exit code 0 if everything passes.
 """
 import argparse, collections, gzip, io, json, os, re, shutil, sys, time, zipfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -32,7 +33,7 @@ from guide import Server
 from arena import Test
 from trophies import CARPET
 from modrinth import fetch
-from herald_grounds import AUDIT, BUILT, SLOW_MS, ROADS_AUDIT, PLACED as PLACED_AT
+from herald_grounds import AUDIT, BUILT, HOUSE_BUILT, HOUSE_BY_KIND, SLOW_MS, ROADS_AUDIT, ROADS_BUILT, PLACED as PLACED_AT
 
 SEED, LEVEL_TYPE = "-2071092601429184301", "minecraft\\:large_biomes"
 # Where this test places the town by hand (`herald place here`; its ground at 90), on the owner's seed: steep land with a
@@ -428,6 +429,19 @@ def main():
             return 1
         box = [int(v) for v in m.groups()[3:]]
         ground_y = int(m.group(2))
+        # the town's own build, under the same cap as its grounds and its roads: no step over SLOW_MS ms on the server
+        # thread. Before this was measured, on this very seed, LOAD (335-935 ms, nearly all of it waiting for a chunk it
+        # had asked for on the server thread), a ROAD step (168-233, waiting as well), BEDS (164-200, all of it work) and
+        # TEMPLATE (87-120) broke it, and nothing could see them: the build logged only its total.
+        hb = re.search(HOUSE_BUILT, ctx.log())
+        bk = re.search(HOUSE_BY_KIND, ctx.log())
+        if p.check(hb, "no cost line from the town's own build"):
+            print(f"COST town: {hb.group(1)} ticks, {hb.group(2)} ms on the server thread, the slowest step {hb.group(3)} ms "
+                  f"({hb.group(4)} of it work): {hb.group(5)}", flush=True)
+            if bk:
+                print(f"COST town by kind: {bk.group(1)}", flush=True)
+            p.check(int(hb.group(3)) <= SLOW_MS,
+                    f"the town's build: a step of {hb.group(3)} ms on the server thread (at most {SLOW_MS}): {hb.group(5)}")
         sh = re.search(SHORES, ctx.log())
         if p.check(sh, "no shores line from the town's build"):
             ponds, drained, banked, cleared = (int(v) for v in sh.groups())
@@ -454,10 +468,14 @@ def main():
             p.check(bare <= STEP_SHARE * cols, f"the grounds' audit: {bare} bare steps (of {cols} columns)")
             p.check(pillars == 0 and holes == 0, f"the grounds' audit: {pillars} loose columns and {holes} holes")
         print(f"COST grounds: {b[0]} ticks, {b[1]} ms on the server thread, the slowest step {b[2]} ms (the plan {b[3]} ms off it)")
+        rb = re.search(ROADS_BUILT, log)
+        if p.check(rb, "no cost line from the town's roads"):
+            print(f"COST roads: {rb.group(1)} ticks, {rb.group(2)} ms on the server thread, the slowest step {rb.group(3)} ms")
+            p.check(int(rb.group(3)) <= SLOW_MS, f"the roads' build: a step of {rb.group(3)} ms on the server thread (at most {SLOW_MS})")
     finally:
         srv.stop()
     for bad in ("Registry loading errors", "at io.github.albertosa23", "the plan failed", "step "):
-        if bad in ctx.log() and (bad != "step " or re.search(r"herald's house (grounds|roads): step .* failed", ctx.log())):
+        if bad in ctx.log() and (bad != "step " or re.search(r"herald's house( grounds| roads)?: step .* failed", ctx.log())):
             fails.append(f"the log contains {bad!r}")
     if box:
         read_back(p, a.work, os.path.abspath(a.jar), box, ground_y, ctx.log())

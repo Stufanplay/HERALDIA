@@ -425,6 +425,15 @@ public final class HeraldHouse {
 			LOGGER.info("Heraldia: herald's house: disabled ({} = false)", ENABLED);
 			return;
 		}
+		// The first villager costs 78 ms, so it is paid once here instead of inside a step of the town's build. Put on the
+		// server's task queue, as Guide and Welcome do, rather than run inline: on SERVER_STARTED this would sit between
+		// the version check's own thread starting (VersionNotice registers before us in Heraldia.onInitialize) and the
+		// "N estructuras registradas" line (registered after us), and its 108-140 ms were enough to push that line past
+		// the check's reply, which made tools/smoke/update_check.py fail 3 of 3 (docs/LESSONS.md). server.execute would
+		// NOT do: called from the server thread outside a task it runs inline (ReentrantBlockableEventLoop
+		// .scheduleExecutables is runningTask() || !isSameThread(), read in the 26.3 bytecode), which measured as no
+		// change at all. It still runs long before the build's first villager: the build's first 144 steps load chunks.
+		server.schedule(server.wrapRunnable(() -> Building.warmUp(ow)));
 		s.origin().ifPresent(o -> load(ow, o, s.version()));
 		if (s.origin().isEmpty() && !s.decided()) {
 			boolean fresh = ow.getGameTime() < NEW_WORLD_TICKS;

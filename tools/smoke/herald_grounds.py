@@ -48,6 +48,11 @@ ROADS_BUILT = r"herald's house roads: built in (\d+) ticks \((\d+) ms on the ser
 ROADS_AUDIT = (r"herald's house roads: audit: (\d+) road columns on land, (\d+) blocked \(.*?\), (\d+) not paved, (\d+) steps of more "
                r"than one block, (\d+) leaves no tree holds near the road")
 PLACED = r"herald's house: placed at (-?\d+) (-?\d+) (-?\d+)"
+# the town itself (herald/Building), as the grounds and the roads report theirs: ticks, ms on the server thread, the
+# slowest step with the thread's own CPU time in it, and which step it was
+HOUSE_BUILT = (r"herald's house: built in (\d+) ticks \((\d+) ms on the server thread, the slowest step (\d+) ms, "
+               r"([^,]+?) of it the server thread's own work: (.+?); one step a tick\)")
+HOUSE_BY_KIND = r"herald's house: by kind of step: (.+)"
 SLOW_MS = 100              # the orchestrator's cap for any step on the server thread
 STEP_SHARE = 0.01          # bare steps a road, a structure or a cliff forces, of the columns further in
 RAMP_SHARE = 0.04          # one-block steps in ramps (OutskirtsPlan.RAMP or more one after another), of the columns (14 % on this seed before terraces)
