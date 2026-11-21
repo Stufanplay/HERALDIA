@@ -413,7 +413,14 @@ def main():
         ctx.run(f"player {P} spawn at {x} {y} {z}", r"joined the game|Unknown|Incorrect")
         if not p.check(ctx.until(f"execute if entity @a[name={P}]"), "Carpet's player does not appear"):
             return 1
-        ctx.run(f"tp {P} {x} {y} {z}", r"Teleported|Unknown")
+        # `place here` builds at the bot's block, and this test's y is 21 blocks above the natural ground (the surface
+        # at (0, 48) is y 70; the town is placed at 91 on purpose, because its build levels its own footprint). So
+        # between the teleport and the command the bot is in free fall: once in nine runs it had dropped a block and
+        # the town came out at ground 90, which shifts the footprint and with it every figure the pond gives. One
+        # block under its feet takes the fall out, and `s.stand` does not return until it really is resting there.
+        # The block is at the plaza's centre, inside what the build levels and paves over.
+        ctx.run(f"setblock {x} {y - 1} {z} minecraft:dirt", r"Changed the block|No blocks|Could not set")
+        s.stand(ctx, P, x, y, z)
         ctx.run(f"execute as {P} run heraldia herald place here", r"heraldia|Herald|Heraldo|place|confirm")
         ctx.run(f"execute as {P} run heraldia herald place confirm", r"Building the Herald's House|Construyendo la Casa del Heraldo")
         m = p.wait_log(PLACED, 900)

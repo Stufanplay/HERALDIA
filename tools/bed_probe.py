@@ -6,7 +6,9 @@ Usage: python3 tools/bed_probe.py --jar build/libs/heraldia-X.jar --trials trial
        [--ticks 2400] [--night] [--work build/probe]
 - with --ret (the one the figures in mediums/_paths come from): the template's own villagers claim their beds by day;
   the one that claimed keep_bed is teleported to `cell` at nightfall (13000, the clock stopped) and left to come home;
-- without it: the template's villagers are removed and a villager with no bed is summoned at `cell` (with --night at
+- with --stay DAYS: the template's own inhabitants live in their copy for DAYS in-game days with the clock running
+  (ending at nightfall); each result is one inhabitant: `home`, `job` (its workstation) and `pos`. `cell` is unused;
+- without either: the template's villagers are removed and a villager with no bed is summoned at `cell` (with --night at
   13000): does it claim one? A villager's search never finds a walk of 16 or more, so this mostly measures distance.
 Each result: the trial plus `home` (the bed it remembers, template coordinates, or null) and `pos` (where it is).
 trials.json: [{"template": "medianas/posada/llanura/a", "cell": [x, y, z], "floor": feet height, "keep_bed": [x, y, z]
@@ -33,6 +35,8 @@ def main():
     ap.add_argument("--ticks", type=int, default=1200)
     ap.add_argument("--night", action="store_true")
     ap.add_argument("--batch", type=int, default=24)
+    ap.add_argument("--stay", type=float, default=0, help="stay probe: the copies keep their inhabitants and the clock runs "
+                    "this many in-game days (to nightfall); then each inhabitant's position, bed and workstation")
     ap.add_argument("--ret", action="store_true", help="return probe: own villagers claim, one is teleported at dusk")
     ap.add_argument("--follow", type=float, default=None, help="set the probe villagers' follow_range")
     a = ap.parse_args()
@@ -73,6 +77,39 @@ def reader(proc, lines, work):
     lines.put(None)
 
 
+def run_stay(ctx, slots, a):
+    """--stay: the inhabitants live in their copy for a.stay days with the clock running; where are they at the end?"""
+    ctx.run("gamerule advance_time true", r"Gamerule|set to|now")
+    ctx.run("time set 1000", r"Set the time|time to|Set minecraft:\w+ to|already set")
+    t0 = ctx.gametime()
+    ms.sprint(ctx, int(a.stay * 24000) + 13000 - 1000)        # ends at nightfall (13000)
+    time.sleep(20)                                              # a moment at normal speed for them to bed down
+    out = []
+    for k, (tr, t, ox, oz, (x0, z0, x1, z1)) in enumerate(slots):
+        box = f"x={x0 - 8},y={Y - 10},z={z0 - 8},dx={x1 - x0 + 16},dy=60,dz={z1 - z0 + 16}"
+        sel = f"@e[type=minecraft:villager,{box}]"
+        n = ctx.count(sel)
+        for j in range(n):
+            ctx.run(f"tag {sel[:-1]},tag=!probe_seen,limit=1] add probe_seen{j}", r"Added tag|Could not|No entity")
+            one = f"@e[tag=probe_seen{j},limit=1]"
+            ctx.run(f"tag {one} add probe_seen", r"Added tag|Could not|No entity")
+            mem = {}
+            for key in ("home", "job_site"):
+                m = ctx.run(f"data get entity {one} Brain.memories.\"minecraft:{key}\".value.pos",
+                            r"entity data: \[I; (-?\d+), (-?\d+), (-?\d+)\]|Found no elements|No entity was found|not found")
+                mem[key] = [int(m.group(1)) - ox, int(m.group(2)) - Y, int(m.group(3)) - oz] if m.group(1) else None
+            p = ctx.pos(one)
+            pos = [round(p[0] - ox, 1), round(p[1] - Y, 1), round(p[2] - oz, 1)] if p else None
+            r = dict(tr, villager=j, home=mem["home"], job=mem["job_site"], pos=pos, ticks=ctx.gametime() - t0)
+            print("RESULT", json.dumps(r), flush=True)
+            out.append(r)
+            ctx.run(f"tag {one} remove probe_seen{j}", r"Removed tag|Could not|No entity")
+        ctx.run(f"kill {sel}", r"Killed|No entity was found")
+    for tr, t, ox, oz, (x0, z0, x1, z1) in slots:
+        ms.forceload(ctx, x0 - 16, z0 - 16, x1 + 16, z1 + 16, remove=True)
+    return out
+
+
 def run_batch(ctx, ts, batch, a):
     slots = []
     for k, tr in enumerate(batch):
@@ -95,7 +132,7 @@ def run_batch(ctx, ts, batch, a):
         end = time.monotonic() + 15
         while not ctx.test(f"execute if entity @e[type=minecraft:villager,{box}]") and time.monotonic() < end:
             time.sleep(1)
-        if not a.ret:
+        if not a.ret and not a.stay:
             ctx.run(f"kill @e[type=minecraft:villager,{box}]", r"Killed|No entity was found")
         for ex, ey, ez, st in tr.get("edits", []):
             ctx.run(f"setblock {ox + ex} {Y + ey} {oz + ez} {st}", r"Changed the block|Could not set")
@@ -105,6 +142,8 @@ def run_batch(ctx, ts, batch, a):
                 if st.split("[")[0].endswith("_bed") and "part=head" in st and [bx, by, bz] != keep:
                     ctx.run(f"setblock {ox + bx} {Y + by} {oz + bz} minecraft:air", r"Changed the block|Could not set")
     time.sleep(2)
+    if a.stay:
+        return run_stay(ctx, slots, a)
     if a.ret:
         ctx.run("time set 1000", r"Set the time|time to|Set minecraft:\w+ to|already set")
         homes = {}

@@ -165,6 +165,18 @@ def trap_issues(t):
             for bed, trap, walk in _paths.trap_walk(t) if walk > _paths.TRAP_WALK_MAX]
 
 
+def stranded_issues(t):
+    """Cells an inhabitant can climb a ladder to and has no way back from (mediums/_paths.stranded)."""
+    from . import _paths
+    found = _paths.stranded(t)
+    if not found:
+        return []
+    cell, (x, z, y0, y1) = found[0]
+    return [f"{len(found)} cells (e.g. {cell}) an inhabitant gets to by climbing the ladder at x {x}, z {z} (y {y0}-{y1}) "
+            f"and has no way back to its bed from (its search never uses ladders and drops 3 blocks at most): lower the "
+            f"top to a drop of 3, or shut the ladder's foot behind a fence gate (_common.ladder_closet)"]
+
+
 def issues(t):
     """Contract of the inhabitants of a template (empty list = fine)."""
     import lint
@@ -194,6 +206,7 @@ def issues(t):
     bells = [q for q, (st, _) in t.blocks.items() if _name(st) == "bell" and _beside(cells, *q)]
     errs += _fence_traps(t, cells)
     errs += trap_issues(t)
+    errs += stranded_issues(t)
     used_jobs = set()
     for p, n in living:
         prof = n["VillagerData"]["profession"].split(":")[1]

@@ -137,7 +137,7 @@ def main():
                 break
             time.sleep(s.PLACE_RETRY_S)
         for rule in ("spawn_mobs", "advance_time", "advance_weather"):
-            ctx.run(f"gamerule {rule} false", rf"[Gg]ame ?rule .*{rule}|Unknown|Incorrect")
+            ctx.must(f"gamerule {rule} false", rf"[Gg]ame ?rule .*{rule}.*false")
         srv.spawn(P)
         creative(srv)
         # 1) loot with the probability at 100 % and, after reloading, at 0 %

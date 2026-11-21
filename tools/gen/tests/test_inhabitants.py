@@ -235,3 +235,50 @@ def test_a_trap_is_where_the_search_stops_short(reg):
     assert not ok and end == (4, 0, 0)
     ok, _ = _paths.find_path(g, (3, 0, 6), (8, 0, 6))      # near the end of the wall: a short way round
     assert ok
+
+
+def test_no_inhabitant_is_stranded_up_a_ladder(reg):
+    """No inhabited template lets a villager climb a ladder to where its search has no way back (mediums/_paths.stranded),
+    and the three seen or found stranding fail it again as they were: the hunters' lookout a block higher (a drop of 4:
+    both inhabitants stranded on it in CI; 6 of 12 left on top got home on a server, 12 of 12 with it lower), and the
+    windmill's and the watchtower's ladders with their foot open."""
+    import core
+    from mediums import _paths
+    seen = 0
+    for name, t in reg.templates.items():
+        if name.startswith("medianas/") and any(inh.is_inhabitant(n) for *_, n in t.entities):
+            seen += 1
+            assert inh.stranded_issues(t) == [], name
+    assert seen == 28
+
+    def edited(t, changes):
+        w = core.Template(t.name + "#old")
+        w.blocks = dict(t.blocks)
+        for p, st in changes.items():
+            if st is None:
+                w.blocks.pop(p, None)
+            else:
+                w.blocks[p] = (st, None)
+        w.jigsaws, w.entities = t.jigsaws, t.entities
+        return w
+
+    t = reg.templates["medianas/cazadores/sabana/a"]
+    # the old lookout: everything from y = 1 up one block higher (x 10..12, z 1..4), the ladder to y = 4
+    old = {}
+    for (x, y, z), (st, _) in t.blocks.items():
+        if 10 <= x <= 12 and 1 <= z <= 4 and y >= 1:
+            old[(x, y, z)] = None
+    for (x, y, z), (st, _) in t.blocks.items():
+        if 10 <= x <= 12 and 1 <= z <= 4 and y >= 1:
+            old[(x, y + 1, z)] = st
+    for (x, z) in ((10, 1), (12, 1), (10, 3), (12, 3), (11, 4)):
+        old[(x, 1, z)] = t.blocks[(x, 1, z)][0]
+    old[(11, 1, 3)] = t.blocks[(11, 1, 3)][0]
+    lookout = edited(t, old)
+    assert _paths.stranded(lookout) and inh.issues(lookout) != []
+    for name, gate, posts in (("medianas/molino/llanura/b", (4, 1, 9), [(5, 1, 10), (5, 2, 10)]),
+                              ("medianas/torre_vigia/taiga/b", (7, 1, 9), [(6, 1, 10), (6, 2, 10), (8, 1, 10), (8, 2, 10)])):
+        t = reg.templates[name]
+        assert t.blocks[gate][0].split("[")[0].endswith("_fence_gate"), name
+        opened = edited(t, {p: None for p in [gate] + posts})
+        assert _paths.stranded(opened), name
