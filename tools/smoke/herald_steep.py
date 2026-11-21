@@ -345,6 +345,13 @@ def read_back(p, work, jar, foot, ground_y, log):
     print(f"READ BACK: {lawn} of {len(edge)} land columns of the margin and the forecourt are grass", flush=True)
     p.check(len(edge) > 3000, f"read back: only {len(edge)} land columns in the margin and the forecourt")
     p.check(lawn <= LAWN_SHARE * len(edge), f"read back: {lawn} of {len(edge)} columns round the wall are grass on desert land")
+    # nor inside the wall: the town's own ground is the land's too (the crops keep their plots, the trees their pits)
+    yard = [c[1] for (x, z), c in cols.items() if c is not None and out(x, z) == 0 and z <= mz - FORECOURT
+            and (ground(c[1]) or c[1] in ("sand", "red_sand", "gravel", "mud"))]
+    green = sum(b == "grass_block" for b in yard)
+    print(f"READ BACK: {green} of {len(yard)} open ground columns inside the wall are grass", flush=True)
+    p.check(len(yard) > 3000, f"read back: only {len(yard)} open ground columns inside the wall")
+    p.check(green <= LAWN_SHARE * len(yard), f"read back: {green} of {len(yard)} columns inside the wall are grass on desert land")
     inside = {}
     for (x, z), c in cols.items():
         if c is None or town(x, z) or blend(x, z) or not ground(c[1]) or c[1] in PAVING or c[1] in KERB:
