@@ -163,8 +163,18 @@ final class Building {
 	 * the brain is built, and the save format's codecs are read for the first time. Whichever {@link Phase#TEMPLATE} step
 	 * placed the town's first villager paid all of that on top of its own work: that chunk's step was the slowest of the
 	 * build in four runs of four, 87-120 ms where the other 63 chunks took 26 ms, and a step may take 100 ms. Paid here
-	 * instead, in a tick nobody is playing through, the slowest step of the build is 64-73 ms (three passes) and which
-	 * chunk it falls on moves from run to run, most of it the collector and not this thread's own work.
+	 * instead, in a tick nobody is playing through, the slowest step of the build is 52-68 ms (three passes, with design
+	 * 2b inside) and which chunk it falls on moves from run to run, most of it the collector and not this thread's own
+	 * work.
+	 * <p>
+	 * <strong>Declared, because no check sees it:</strong> this is 94-235 ms (median about 125, twelve runs) in a single
+	 * tick, once per world, with nobody connected, and it is <em>outside</em> the 100 ms-per-step cap that
+	 * {@code tools/smoke/herald_steep.py} enforces -- the cap reads the build's own steps, and this is not one. It is
+	 * over that cap on its own. That is the trade on purpose: the alternative is paying the same cost inside a
+	 * {@code TEMPLATE} step, where it breached the cap (87-120 ms on top of 26 ms of real work) and where it landed on
+	 * whichever chunk happened to hold the first villager. The owner's criterion is the fluidity of play, and this tick
+	 * happens before anyone can be playing. It is put on the server's task queue by {@code HeraldHouse.onStart} rather
+	 * than run inside {@code SERVER_STARTED}, for the ordering reason recorded there.
 	 * <p>
 	 * Both are made the way {@code StructureTemplate.placeInWorld} makes the town's: one from nothing, one from a tag,
 	 * which is the path every entity of a template takes. Neither is ever added to the world, so nothing is left behind

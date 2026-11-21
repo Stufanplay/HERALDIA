@@ -39,6 +39,13 @@ worth as much as the finding, because it says where not to look again:
 | `UnwrittenRegions` lock | set operations only; its one `Files.isRegularFile` per region runs outside the lock | code |
 | the builds' blocking `level.getChunk` (town, grounds, roads, arena) | waits, but bounded: one step or one chunk per tick, under the 100 ms cap. Measured on the merged tree, three passes: slowest step 66 / 54 / 70 ms (town), 17 / 25 / 26 ms (roads), 8 / 6 / 9 ms (grounds); of the town's worst `LEVEL` step, 24 / 33 / 18 ms is waiting | measured, three passes |
 
+One tick that no check sees, declared here rather than left to be found: `Building.warmUp`, which makes and throws
+away one villager so the first one a JVM builds is not paid inside a build step, costs **94-235 ms (median about
+125, twelve runs) in a single tick** at startup, once per world, with nobody connected. It is outside the 100 ms
+cap `herald_steep.py` enforces, because that cap reads the build's own steps and this is not one, and it is over
+that cap on its own. The alternative is paying the same cost inside a `TEMPLATE` step, where it measured 87-120 ms
+on top of 26 ms of real work and landed on whichever chunk held the town's first villager.
+
 File I/O that *can* land on the server thread, all of it operator-triggered and none of it per-tick:
 `HeraldiaConfig.save` from the config panel, and the plan and report writes of the `/heraldia update` command.
 
