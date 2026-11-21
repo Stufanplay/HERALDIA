@@ -139,3 +139,17 @@ def villager(mid, key, fallback, profession, kind, offers, rot=0.0):
 
 def place_chest(t, x, y, z, facing, mid, tbl, kind="chest"):
     pieces.chest(put(t), x, y, z, facing, f"{NS}:medianas/{mid}/{tbl}", kind=kind)
+
+
+def ladder_closet(t, x, y, z, wood, post, sides):
+    """Shut the foot of a ladder at (x, y, z) behind a fence gate, so that a villager cannot walk into it: villagers climb
+    a ladder by just walking into it, their path search never uses ladders, and from an upper floor they have no way
+    down (mediums/_paths.stranded). Villagers do not open fence gates; players do. `sides` maps each open side of the
+    foot, (dx, dz), to "gate" (one, closed) or "post" (a log two blocks high: a block of one a villager steps onto and
+    walks into the ladder from)."""
+    for (dx, dz), what in sides.items():
+        if what == "gate":
+            facing = {(0, -1): "north", (0, 1): "south", (1, 0): "east", (-1, 0): "west"}[(dx, dz)]
+            t.set(x + dx, y, z + dz, f"{wood}_fence_gate[facing={facing},in_wall=false,open=false,powered=false]")
+        else:
+            t.fill(x + dx, y, z + dz, x + dx, y + 1, z + dz, f"{post}[axis=y]")
