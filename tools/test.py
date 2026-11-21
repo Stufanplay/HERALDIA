@@ -139,7 +139,7 @@ SAFE_UPDATE_JAVA = SAFE_UPDATE + ["tools/smoke/update_path_b.py"]
 MAP = [
     # no server tests: documentation, unit tests, client, changelog
     ("docs/*", []), ("*.md", []), ("tools/gen/tests/*", []), ("src/test/*", []), ("src/client/*", []),
-    ("tools/changelog.py", []), ("tools/gen/render.py", []), ("tools/gen/look.py", []), ("tools/gen/README.md", []), (".gitignore", []),
+    ("tools/changelog.py", []), ("tools/unchecked_replies.py", []), ("tools/gen/render.py", []), ("tools/gen/look.py", []), ("tools/gen/README.md", []), (".gitignore", []),
     # the play cost: its own CI job (RUNTIME_PATHS), no server group
     (RUNTIME, []), ("tools/smoke/TickSampler.java", []), ("tools/smoke/runtime_reference.json", []),
     # villages: piece generator and its Java

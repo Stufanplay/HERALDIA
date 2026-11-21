@@ -1,6 +1,8 @@
-"""tools/smoke/server_smoke.py: test server downloads (a cut-off download is not left in the cache) and the pure
-functions of tools/smoke/existing_world.py (reading sections and comparing saved chunks)."""
-import io, os, sys, zipfile
+"""tools/smoke/server_smoke.py: test server downloads (a cut-off download is not left in the cache), whether a
+command's reply is looked at (`run` comes back with the error reply, `must` does not accept it) and where an entity has
+to be standing for `land` to call it settled; and the pure functions of tools/smoke/existing_world.py (reading sections
+and comparing saved chunks)."""
+import io, os, re, sys, zipfile
 import pytest
 
 SMOKE = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "smoke")
@@ -145,3 +147,88 @@ def test_forceload_pieces_of_256_chunks():
     assert all(((x1 - x0 + 1) // 16) * ((z1 - z0 + 1) // 16) <= 256 for x0, z0, x1, z1 in t)
     roofed_set = {(x // 16, z // 16) for x0, z0, x1, z1 in t for x in range(x0, x1 + 1, 16) for z in range(z0, z1 + 1, 16)}
     assert roofed_set == C
+
+
+# --- where a command's reply is looked at, and where an entity has to be standing (server_smoke.must / land)
+
+class _Server:
+    """The least that `server_smoke.run` needs of a server: `write` is the command going out, and the reply arrives
+    right after it, as it does on a real one (`pending` drains the queue before sending, so a pre-loaded reply would be
+    thrown away instead of matched)."""
+
+    def __init__(self, lines, reply):
+        self.stdin, self.lines, self.reply, self.sent = self, lines, reply, []
+
+    def write(self, text):
+        self.sent.append(text)
+        self.lines.put(self.reply)
+
+    def flush(self):
+        pass
+
+
+def _answer(reply, cmd, ok, how):
+    import queue
+    lines, seen = queue.Queue(), []
+    return how(_Server(lines, reply), lines, seen, cmd, ok)
+
+
+OK_REPLY = "[00:00:00] [Server thread/INFO]: Game rule keep_inventory is now set to true\n"
+BAD_REPLY = "[00:00:00] [Server thread/INFO]: Incorrect argument for command at position 9\n"
+RULE = r"[Gg]ame ?rule .*keep_inventory.*true"
+
+
+def test_run_comes_back_with_the_error_reply_and_raises_nothing():
+    """The property the callers have to know about: `run` waits for `ok` OR `ERROR_PATTERN` and returns either, so a
+    caller that does not read the reply accepts the failure."""
+    m = _answer(BAD_REPLY, "gamerule keep_inventory true", RULE, s.run)
+    assert m.group(0) == "Incorrect"
+    assert not re.search(RULE, m.string)
+
+
+def test_must_accepts_the_success_reply_and_rejects_the_error_one():
+    assert _answer(OK_REPLY, "gamerule keep_inventory true", RULE, s.must).string == OK_REPLY
+    with pytest.raises(SystemExit) as e:
+        _answer(BAD_REPLY, "gamerule keep_inventory true", RULE, s.must)
+    assert "Incorrect argument" in str(e.value)
+
+
+def test_must_cannot_tell_apart_a_pattern_that_matches_the_failure():
+    """Why the two gamerule patterns had to lose `Unknown|Incorrect`: with the failure's words in `ok`, the error reply
+    *is* the accepted reply and `must` has nothing left to reject."""
+    loose = RULE + r"|Unknown|Incorrect"
+    assert _answer(BAD_REPLY, "gamerule keep_inventory true", loose, s.must).string == BAD_REPLY
+
+
+def test_resting_is_the_feet_on_the_aimed_spot_not_floor_of_the_y():
+    """`land`'s own comparison, with `want` shaped as the teleport reports it (integer x and z come back centred on the
+    block). The aimed y is a feet level -- the heightmap's y above its top block -- so a block shorter than a full cube
+    holds the feet just under it and that is still resting; a whole block down is not."""
+    want = (0.5, 91.0, 48.5)
+    assert s._resting((0.5, 91.0, 48.5), want)              # full block, exactly where the teleport left it
+    assert s._resting((0.5, 90.9375, 48.5), want)           # a path block: measured on a server, floor 90, aimed 91
+    assert not s._resting((0.5, 90.0, 48.5), want)          # fell one whole block: the fault this guards against
+    assert not s._resting((0.5, 89.9375, 48.5), want)       # fell one block onto a path
+    assert not s._resting((0.5, 92.0, 48.5), want)          # still in the air one block up
+    assert not s._resting((1.5, 91.0, 48.5), want)          # right height, wrong column
+    assert not s._resting(None, want)                       # no entity at all
+
+
+def test_the_teleport_reply_gives_the_aimed_spot():
+    """The only race-free source of where the teleport aimed: the game writes it inside the teleport. Both replies are
+    verbatim from a dedicated server, 26.3."""
+    ok = "[00:00:00] [Server thread/INFO]: System chat: Teleported Probe to 0.500000, 63.000000, 48.500000\n"
+    m = re.search(s._TELEPORTED, ok)
+    assert tuple(float(v) for v in m.groups()) == (0.5, 63.0, 48.5)
+    unloaded = "[00:00:00] [Server thread/INFO]: System chat: That position is not loaded\n"
+    m = re.search(s._TELEPORTED, unloaded)
+    assert m and m.group(1) is None        # `land` keeps waiting on this one instead of taking it for a destination
+
+
+def test_one_asks_for_exactly_one_entity():
+    """`data get entity` refuses a selector that could match more than one, with a message `ERROR_PATTERN` does not
+    cover, so the wait would run its full 300 s. And a bare name cannot carry the `[limit=1]` `pos` appends."""
+    assert s._one("rep") == "@a[name=rep,limit=1]"
+    assert s._one("@a[name=rep]") == "@a[name=rep,limit=1]"
+    assert s._one("@a[name=rep,limit=1]") == "@a[name=rep,limit=1]"
+    assert s._one("@e") == "@e[limit=1]"
