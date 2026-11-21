@@ -51,7 +51,9 @@ branch 100). No sign that the routes break; with one run a side and different sa
 | 8 villages | villagers | moving | commute | asleep | with a bell | same house |
 |---|---|---|---|---|---|---|
 | `develop` | 104 | 93 (+4) | 45 (+3) | 64 (+12) | 79 (+11) | 20 (+0) |
-| this branch | 100 | 92 (+7) | 50 (+10) | 65 (+15) | 74 (+9) | 14 (+6) |
+| this branch, first head, run 1 | 100 | 92 (+7) | 50 (+10) | 65 (+15) | 74 (+9) | 14 (+6) |
+| this branch, first head, run 2 | 100 | 90 (+5) | 46 (+6) | 64 (+14) | 73 (+8) | 15 (+5) |
+| this branch, as it is now | 100 | 88 (+3) | 42 (+2) | 62 (+12) | 73 (+8) | 15 (+5) |
 
 | 3 hard ones | villagers | moving | commute | asleep | with a bell | same house |
 |---|---|---|---|---|---|---|
@@ -61,3 +63,15 @@ branch 100). No sign that the routes break; with one run a side and different sa
 (In brackets, the margin over each limit in villagers. No limit is changed.)
 
 Not measured: the cost of generating while a player explores (the scenario for it is being built).
+
+## A mistake CI caught
+
+The first head of this branch made every house of every style a different house. The woodpile drew one number from the
+style's random source, and the decoration is built before the houses from that same source, so everything built after
+it changed: 125 of the 432 house templates carried a filler container on `develop` and 120 did on that head, and the
+house a server test takes as its sample of one (`filler_loot.py`: `taiga_eslava/houses/medium_3`) was no longer one. The
+test was right to fail: a change to the streets has no business changing the houses. The woodpile's choice is now a
+fixed function of the style, a test checks that no street thing draws from the random source, and the built jar was
+compared with `develop`'s file by file: 144 new templates, 324 changed (144 avenues, 108 streets, 72 plazas), every
+house and every special building identical. The generation cost above and the first two route runs were measured on
+the first head (other houses); the last route row and the server tests are of the branch as it is.

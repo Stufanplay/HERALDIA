@@ -78,3 +78,14 @@ def test_the_plaza_keeps_what_the_welcome_uses_and_harms_nobody(th, large):
     for k in range(1, C - 4):
         for x, z in ((C, k), (C, N - 1 - k), (k, C), (N - 1 - k, C)):
             assert blocks.get((x, 1, z), "air") == "air" and blocks.get((x, 2, z), "air") == "air", (x, z)
+
+
+def test_the_streets_things_draw_nothing_from_the_styles_random_source():
+    """The decoration is built before the houses from the same random source: a draw here would make every house of the
+    style a different house (it did: 5 houses lost their filler container and a server test's sample with them)."""
+    for th in THEMES[:6]:
+        for kind in streets.STREET_THINGS:
+            rng = random.Random(7)
+            before = rng.getstate()
+            streets.decor_piece(th, rng, f"{th['id']}/decor/{kind}", kind)
+            assert rng.getstate() == before, (th["id"], kind)

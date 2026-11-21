@@ -309,7 +309,9 @@ def decor_piece(th, rng, name, kind):
             t.set(0, 1, 0, stairs(th["wstairs"], "north"))
         elif kind == "woodpile":
             t.set(0, 1, 0, log(th["log"], "x"))
-            if rng.random() < 0.5:
+            # a fixed choice per style, not a draw: the houses, built after the decoration from the same random
+            # source, stay the houses they were
+            if _worn(len(th["id"]), sum(map(ord, th["id"])), 4) < 0.5:
                 t.set(0, 2, 0, log(th["log"], "x"))
         elif kind == "hay":
             t.set(0, 1, 0, "hay_block[axis=y]")
