@@ -9,6 +9,7 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
 import io.github.albertosa23.heraldia.Heraldia;
 import io.github.albertosa23.heraldia.arena.Arena;
 import io.github.albertosa23.heraldia.command.Texts;
+import io.github.albertosa23.heraldia.common.Placing;
 import io.github.albertosa23.heraldia.config.HeraldiaConfig;
 import io.github.albertosa23.heraldia.roads.BuiltRoads;
 import io.github.albertosa23.heraldia.roads.RoadLayout;
@@ -998,7 +999,7 @@ public final class Outskirts {
 			}
 		}
 		BlockPos origin = new BlockPos(w.g.ox() + slot.origin()[0], y, w.g.oz() + slot.origin()[1]);
-		StructurePlaceSettings settings = new StructurePlaceSettings().setRotation(slot.rotation()).setIgnoreEntities(true);
+		StructurePlaceSettings settings = Placing.dry(new StructurePlaceSettings().setRotation(slot.rotation()).setIgnoreEntities(true));
 		t.get().placeInWorld(w.level, origin, origin, settings, w.level.getRandom(), BuiltRoads.FLAGS);
 		// off grassland the plot's bare grass goes back to that surface: a house on the sand, not on a green doormat
 		for (int x = hs.slot().x0(); x <= hs.slot().x1(); x++) {

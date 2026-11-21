@@ -12,6 +12,7 @@ import io.github.albertosa23.heraldia.arena.Arena;
 import io.github.albertosa23.heraldia.choice.Choice;
 import io.github.albertosa23.heraldia.choice.Choices;
 import io.github.albertosa23.heraldia.command.Texts;
+import io.github.albertosa23.heraldia.common.Placing;
 import io.github.albertosa23.heraldia.config.HeraldiaConfig;
 import io.github.albertosa23.heraldia.roads.BuiltRoads;
 import io.github.albertosa23.heraldia.roads.RoadLayout;
@@ -905,7 +906,8 @@ public final class SpawnRoads {
 			default -> Rotation.NONE;
 		};
 		BlockPos origin = new BlockPos(frame[1], y0, frame[2]);
-		StructurePlaceSettings settings = new StructurePlaceSettings().setRotation(rot).setIgnoreEntities(false).setFinalizeEntities(false);
+		StructurePlaceSettings settings = Placing.dry(new StructurePlaceSettings().setRotation(rot).setIgnoreEntities(false)
+				.setFinalizeEntities(false));
 		t.get().placeInWorld(level, origin, origin, settings, level.getRandom(), BuiltRoads.FLAGS);
 		int beds = 0;          // a bed's two halves, set again (as the town's: a half may have been dropped)
 		for (Block b : BuiltInRegistries.BLOCK) {

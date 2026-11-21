@@ -58,7 +58,7 @@ STRUCTURE_REACH = 4        # the road's sides checked for structures
 DETOURS = (24, -24, 48, -48, 72, -72, 96, -96, 128, -128)
 CORNER = 20                # the corner detours round the arena's box this far out
 # --- the huts ---
-HUT_SIZE = (7, 6, 7)       # along the road, height, depth (porch 2 + hut 5)
+HUT_SIZE = (7, 9, 7)       # along the road, height, depth (porch 2 + hut 5)
 PORCH = 2
 EDGE = WIDTH // 2 + 1      # the hut template's first row (the porch) is this far from the road's axis
 DOOR = (3, 1, 2)           # the door's lower half (local), facing the road (local north)
@@ -405,17 +405,106 @@ def slots(guide):
     return ([GUIDE_SLOT] if guide else []) + SLOTS
 
 
+# Each hut is its own building (design pass, phase 2): the same plan (door, bed, workstation, bell and lanterns where the
+# Java side expects them) under its own walls, roof, porch and what stands on the porch. `roof`: "x" a gable with its
+# ridge along the road, "z" a gable whose end faces the road, "hip" or "lean" (a single slope rising to the back).
+LOOK = {
+    "farmer": dict(wall="oak_planks", base="cobblestone", post="oak_log", roof="x", tile="spruce", porch="awning",
+                   prop=("hay_block", "hay_block")),
+    "fisherman": dict(wall="spruce_planks", base="stone_bricks", post="spruce_log", roof="z", tile="dark_oak", porch="roof",
+                      prop=("dried_kelp_block",)),
+    "shepherd": dict(wall="white_terracotta", base="cobblestone", post="dark_oak_log", roof="hip", tile="spruce",
+                     porch="awning", prop=("white_wool", "light_gray_wool")),
+    "fletcher": dict(wall="spruce_log[axis=x]", base="mossy_cobblestone", post="spruce_log", roof="x", tile="dark_oak",
+                     porch="roof", prop=("target",)),
+    "leatherworker": dict(wall="mud_bricks", base="packed_mud", post="stripped_oak_log", roof="lean", tile="spruce",
+                          porch="awning", prop=("brown_wool",)),
+    "mason": dict(wall="stone_bricks", base="andesite", post="polished_andesite", roof="hip", tile="dark_oak",
+                  porch="roof", prop=("chiseled_stone_bricks", "stone_brick_slab[type=bottom,waterlogged=false]")),
+    "butcher": dict(wall="bricks", base="cobblestone", post="spruce_log", roof="z", tile="mud_brick", porch="awning",
+                    prop=(), chimney=True),
+    "guia": dict(wall="cobblestone", base="mossy_cobblestone", post="dark_oak_log", roof="x", tile="deepslate_tile",
+                 porch="awning", prop=("anvil[facing=north]",), chimney=True),
+}
+WOOD_TILES = ("spruce", "dark_oak", "oak")
+
+
+def _st(mat, facing, half="bottom"):
+    return f"{mat}_stairs[facing={facing},half={half},shape=straight,waterlogged=false]"
+
+
+def _slab(mat, kind="bottom"):
+    return f"{mat}_slab[type={kind},waterlogged=false]"
+
+
+def _full(mat):
+    return {"brick": "bricks", "mud_brick": "mud_bricks", "stone_brick": "stone_bricks", "deepslate_tile": "deepslate_tiles"}.get(
+        mat, mat + "_planks")
+
+
+def _roof(t, kind, tile, wall, x0, x1, z0, z1, y):
+    """The hut's roof over x0..x1, z0..z1 from the wall plate at y, inside the template's footprint (no overhang)."""
+    w, d = x1 - x0 + 1, z1 - z0 + 1
+    if kind == "x":                                    # ridge along x: the eaves over the front and the back walls
+        for k in range(d // 2):
+            for x in range(x0, x1 + 1):
+                t.set(x, y + k, z0 + k, _st(tile, "south"))
+                t.set(x, y + k, z1 - k, _st(tile, "north"))
+            for z in range(z0 + k + 1, z1 - k):         # the gable ends
+                for x in (x0, x1):
+                    t.set(x, y + k, z, wall)
+        for x in range(x0, x1 + 1):
+            t.set(x, y + d // 2, z0 + d // 2, _slab(tile))
+            t.set(x, y + d // 2 - 1, z0 + d // 2, wall if x in (x0, x1) else "air")
+    elif kind == "z":                                  # ridge along z: a gable end over the door
+        for k in range(w // 2):
+            for z in range(z0, z1 + 1):
+                t.set(x0 + k, y + k, z, _st(tile, "east"))
+                t.set(x1 - k, y + k, z, _st(tile, "west"))
+            for x in range(x0 + k + 1, x1 - k):
+                for z in (z0, z1):
+                    t.set(x, y + k, z, wall)
+        for z in range(z0, z1 + 1):
+            t.set(x0 + w // 2, y + w // 2, z, _slab(tile))
+            t.set(x0 + w // 2, y + w // 2 - 1, z, wall if z in (z0, z1) else "air")
+    elif kind == "hip":
+        for k in range(min(w, d) // 2 + 1):
+            a, b, c, e = x0 + k, x1 - k, z0 + k, z1 - k
+            if a > b or c > e:
+                break
+            for x in range(a, b + 1):
+                for z in range(c, e + 1):
+                    if x in (a, b) or z in (c, e):
+                        if c == e:
+                            st = _slab(tile)
+                        else:
+                            st = _st(tile, "south" if z == c else "north" if z == e else "east" if x == a else "west")
+                        t.set(x, y + k, z, st)
+    else:                                              # a single slope, low over the door and high at the back
+        for k, z in enumerate(range(z0, z1 + 1)):
+            h = y + k // 2
+            for x in range(x0, x1 + 1):
+                t.set(x, h, z, _slab(tile) if k % 2 == 0 else _slab(tile, "top"))
+                for yy in range(y, h):                 # the side walls and the back follow the slope up
+                    if x in (x0, x1) or z == z1:
+                        t.set(x, yy, z, wall)
+
+
 def hut(profession, guide=False):
     """A roadside hut for that profession: local x along the road, z away from it (the porch rows z 0-1, the hut 2-6)."""
-    t = Template(TEMPLATE_PREFIX + ("guia" if guide else profession))
+    name = "guia" if guide else profession
+    look = LOOK[name]
+    t = Template(TEMPLATE_PREFIX + name)
     sx, sy, sz = HUT_SIZE
     a, b = AWNING[profession]
+    wall, base, post, tile = look["wall"], look["base"], look["post"], look["tile"]
     for x in range(sx):
         for z in range(sz):
             t.set(x, 0, z, "cobblestone" if z >= PORCH else "coarse_dirt")
             for y in range(1, sy):
                 t.set(x, y, z, "air")
-    for x in range(sx):                                  # the hut: log posts, a cobblestone footing, plank walls
+    axis = lambda st, ax: st.replace("[axis=y]", "").split("[")[0] + f"[axis={ax}]" if "_log" in st else st
+    for x in range(sx):                                  # the hut: posts at the corners, a footing, its own walls
         for z in range(PORCH, sz):
             edge = x in (0, sx - 1) or z in (PORCH, sz - 1)
             if not edge:
@@ -423,26 +512,31 @@ def hut(profession, guide=False):
                 continue
             corner = x in (0, sx - 1) and z in (PORCH, sz - 1)
             for y in (1, 2, 3):
-                t.set(x, y, z, "spruce_log[axis=y]" if corner else ("cobblestone" if y == 1 else "oak_planks"))
-            t.set(x, 4, z, "spruce_log[axis=x]" if z in (PORCH, sz - 1) else "spruce_log[axis=z]")
-    for x in range(1, sx - 1):                           # the roof: slabs over the hut, one block over the eaves
-        for z in range(PORCH + 1, sz - 1):
-            t.set(x, 4, z, "spruce_planks")
-    for x in range(sx):
-        for z in range(PORCH, sz):
-            t.set(x, 5, z, "spruce_slab[type=bottom,waterlogged=false]")
+                st = axis(post, "y") if corner else (base if y == 1 else wall)
+                if not corner and y > 1 and "axis=x" in wall and x in (0, sx - 1):
+                    st = wall.replace("axis=x", "axis=z")          # a log wall's logs lie along each wall
+                t.set(x, y, z, st)
+    _roof(t, look["roof"], tile, wall.replace("[axis=x]", "[axis=y]") if "_log" in wall else wall, 0, sx - 1, PORCH, sz - 1, 4)
     for x in (1, 5):                                     # two counter windows: 1 high, nobody walks through them
         t.set(x, 2, PORCH, "air")
     t.set(sx - 1, 2, 4, "air")
-    for x, z in ((0, 1), (sx - 1, 1)):                    # the awning over the porch, on two fence posts
+    for x, z in ((0, 1), (sx - 1, 1)):                    # the porch's two posts
         for y in (1, 2, 3):
-            t.set(x, y, z, "spruce_fence")
-    for x in range(sx):
-        if x != DOOR[0]:                                 # open over the door: the way in stays under the sky
-            t.set(x, 4, 1, a if x % 2 == 0 else b)
+            t.set(x, y, z, post.split("[")[0].replace("_log", "_fence").replace("stripped_", "")
+                  if "_log" in post else "cobblestone_wall" if "andesite" not in post else "andesite_wall")
     dx, dy, dz = DOOR
-    t.set(dx, dy, dz, "spruce_door[facing=north,half=lower,hinge=left,open=false,powered=false]")
-    t.set(dx, dy + 1, dz, "spruce_door[facing=north,half=upper,hinge=left,open=false,powered=false]")
+    # over the porch: a striped awning, or a slab roof of the hut's tile. Open over the door either way: the door rule
+    # only checks a door whose way out is under the sky (doors.template_report skips one under a cover)
+    for x in range(sx):
+        if look["porch"] == "awning":
+            if x != dx:                                  # open over the door: the way in stays under the sky
+                t.set(x, 4, 1, a if x % 2 == 0 else b)
+        elif x != dx:
+            t.set(x, 4, 1, _slab(tile))
+            t.set(x, 4, 0, _slab(tile)) if x not in (0, sx - 1) else None
+    door = "spruce_door" if tile in WOOD_TILES or "planks" in wall or "_log" in wall else "dark_oak_door"
+    t.set(dx, dy, dz, f"{door}[facing=north,half=lower,hinge=left,open=false,powered=false]")
+    t.set(dx, dy + 1, dz, f"{door}[facing=north,half=upper,hinge=left,open=false,powered=false]")
     (fx, fy, fz), (hx, hy, hz) = BED
     color = "brown" if not guide else "red"
     t.set(fx, fy, fz, f"{color}_bed[facing=south,part=foot,occupied=false]")
@@ -452,9 +546,15 @@ def hut(profession, guide=False):
     t.set(*STATION, st, {"id": "minecraft:barrel", "LootTable": filler_loot.table_id("pesca")} if st.startswith("barrel") else None)
     t.set(*BELL, "bell[attachment=floor,facing=east,powered=false]")
     t.set(*LANTERN, "lantern[hanging=true,waterlogged=false]")
-    t.set(5, 3, 1, "lantern[hanging=true,waterlogged=false]")       # under the awning
+    t.set(5, 3, 1, "lantern[hanging=true,waterlogged=false]")       # under the porch's cover
     t.set(4, 1, 5, "spruce_trapdoor[facing=north,half=bottom,open=false,powered=false,waterlogged=false]")   # a stool
     t.set(2, 1, 5, "flower_pot")
+    for k, prop in enumerate(look["prop"]):              # what the trade leaves on the porch, beside the door's way
+        t.set(5, 1 + k, 1, prop)
+    if look.get("chimney"):                              # a stack up the back corner, through the roof (no fire in it)
+        top = max(y for (x, y, z) in t.blocks if t.blocks[(x, y, z)][0] != "minecraft:air")
+        for y in range(1, min(sy - 1, top + 1) + 1):
+            t.set(sx - 2, y, sz - 1, "bricks" if y < sy - 1 else "brick_wall")
     n = {"id": "minecraft:villager", "PersistenceRequired": B(1), "Tags": [HUT_TAG] + ([GUIDE_TAG] if guide else ["heraldia"]),
          "VillagerData": {"profession": "minecraft:" + profession, "level": 1, "type": "minecraft:plains"}, "Xp": 1,
          "Rotation": [F(0.0), F(0.0)]}

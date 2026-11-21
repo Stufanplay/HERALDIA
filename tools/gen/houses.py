@@ -153,6 +153,52 @@ def furnish(t, th, rng, room, *, job=None, tier=None, kind="living", ceil=None, 
         t.set(cx, ceil, lz, lantern(th, True))
 
 
+# a wall block's kin, for a few blocks in patches: (low on the wall, high on the wall)
+KIN = {"cobblestone": ("mossy_cobblestone", "cobblestone"), "stone_bricks": ("mossy_stone_bricks", "cracked_stone_bricks"),
+       "mossy_stone_bricks": ("mossy_cobblestone", "stone_bricks"), "mud_bricks": ("packed_mud", "packed_mud"),
+       "deepslate_bricks": ("cobbled_deepslate", "cracked_deepslate_bricks"), "tuff_bricks": ("tuff", "tuff"),
+       "sandstone": ("sandstone", "cut_sandstone"), "smooth_sandstone": ("sandstone", "cut_sandstone"),
+       "red_sandstone": ("red_sandstone", "cut_red_sandstone"), "smooth_red_sandstone": ("red_sandstone", "cut_red_sandstone"),
+       "bricks": ("granite", "bricks"), "cobbled_deepslate": ("cobbled_deepslate", "deepslate_bricks"),
+       "polished_blackstone_bricks": ("blackstone", "cracked_polished_blackstone_bricks")}
+
+
+def weather(t, th, rng, x0, z0, x1, z1, y0, y1):
+    """A few of a stone wall's blocks become their kin, in patches (the same choice for neighbours two apart): damp low
+    on the wall, cracks high. Wood, plaster and glass stay as they are."""
+    ox, oz = rng.randrange(64), rng.randrange(64)
+    for x in range(x0, x1 + 1):
+        for z in range(z0, z1 + 1):
+            if x not in (x0, x1) and z not in (z0, z1):
+                continue
+            for y in range(y0, y1 + 1):
+                st = t.get(x, y, z) or ""
+                kin = KIN.get(st.replace("minecraft:", ""))
+                if not kin:
+                    continue
+                v = (((x + z + ox) // 2 * 73856093) ^ ((y + oz) // 2 * 19349663)) % 100
+                low = (y - y0) * 3 < (y1 - y0 + 1)
+                if v < (26 if low else 12):
+                    t.set(x, y, z, kin[0] if low else kin[1])
+
+
+def dormer(t, th, x, zf, ybase):
+    """A small gabled dormer on the front slope of a gable roof whose ridge runs along x: two posts and a pane one row
+    up the slope, its own little roof carried back into the slope. Nothing inside changes: it stands on the roof."""
+    rs, rsl = th["roof_stairs"], th["roof_slab"]
+    if any(t.get(x + d, ybase + 2 + e, zf + k) not in (None, "minecraft:air") for d in (-1, 0, 1) for e in (0, 1) for k in (0, 1)):
+        return
+    for d in (-1, 1):
+        t.set(x + d, ybase + 2, zf, log(th["stripped"], "y"))
+    t.set(x, ybase + 2, zf, th["window"])
+    for k in (0, 1):
+        t.set(x - 1, ybase + 3, zf + k, stairs(rs, "east"))
+        t.set(x + 1, ybase + 3, zf + k, stairs(rs, "west"))
+        t.set(x, ybase + 4, zf + k, slab(rsl))
+    t.set(x, ybase + 3, zf, log(th["stripped"], "x"))
+    t.set(x, ybase + 4, zf + 2, slab(rsl))
+
+
 def rect_house(th, rng, name, size, depth, tier, job):
     t = Template(name)
     s = th["stilts"]
@@ -192,7 +238,17 @@ def rect_house(th, rng, name, size, depth, tier, job):
             t.set(px, 1, 1, potted(rng.choice(th["plants"])))
     shutters = th["roof_type"] != "flat" and rng.random() < 0.55
     shed = (not s) and th["roof_type"] != "flat" and size != "small" and rng.random() < 0.45
-    chimney = th["chimney"] and th["roof_type"] in ("gable", "steep") and rng.random() < 0.6
+    # the roof of this house: the style's own, but not the same on every house of the street (a hip among gables and a
+    # gable among hips, the ridge along the street or across it)
+    kind, r = th["roof_type"], rng.random()
+    if kind == "hip" and r < 0.35:
+        kind = "gable"
+    elif kind == "gable" and th["shape"] != "long" and r < 0.2:
+        kind = "hip"
+    along = None
+    if kind in ("gable", "steep") and th["shape"] != "long" and abs(W - D) <= 2:
+        along = rng.choice(["x", "x", "z"])
+    chimney = th["chimney"] and kind in ("gable", "steep", "hip") and rng.random() < 0.6
     # --- base and floor
     t.fill(0, fy, zf, W - 1, fy, zb, log(th["found"], "y"))
     t.fill(1, fy, zf + 1, W - 2, fy, zb - 1, th["floor"])
@@ -226,7 +282,11 @@ def rect_house(th, rng, name, size, depth, tier, job):
             t.set(1, y, zf + 1, "ladder[facing=east]")
     # --- interior ceiling and roof
     t.fill(1, fy + H + 1, zf + 1, W - 2, fy + H + 1, zb - 1, th["planks"])
-    top = roof_for(t, th, 0, zf, W - 1, zb, fy + H + 1)
+    top = roof_for(t, th, 0, zf, W - 1, zb, fy + H + 1, kind=kind, along=along)
+    ridge_x = kind in ("gable", "steep") and (along or ("x" if W >= D else "z")) == "x"
+    if kind == "gable" and ridge_x and W >= 9 and floors == 1 and rng.random() < 0.6:
+        dormer(t, th, dx if rng.random() < 0.5 else rng.choice([2, W - 3]), zf, fy + H + 1)
+    weather(t, th, rng, 0, zf, W - 1, zb, fy + 1, fy + H)
     # --- side shed: low woodshed that does not block the windows
     if shed:
         ax0, ax1 = W, W + 2
@@ -244,12 +304,40 @@ def rect_house(th, rng, name, size, depth, tier, job):
     # --- flat roof: exposed beams and dome on the large houses
     if th["roof_type"] == "flat":
         ry = fy + H
+        # by the house's number, so the houses of one size never all get the same terrace
+        k = int(name.rsplit("_", 1)[-1]) if name.rsplit("_", 1)[-1].isdigit() else 0
+        r = (0.2, 0.6, 0.9, 0.2, 0.6)[k % 5]
+        if not (size == "large" and th["dome"]) and W >= 7:
+            bx0 = (1, W - 4)[(k // 2) % 2]
+            if r < 0.4:                                    # a roof room in a back corner: the terrace's own little house
+                for x in range(bx0, bx0 + 3):
+                    for z in range(zb - 3, zb):
+                        edge = x in (bx0, bx0 + 2) or z in (zb - 3, zb - 1)
+                        for y in (ry + 2, ry + 3):
+                            t.set(x, y, z, th["wall"] if edge else "air")
+                        t.set(x, ry + 4, z, f"{th['roof_slab']}[type=bottom]")
+                t.set(bx0 + 1, ry + 2, zb - 3, "air")
+                t.set(bx0 + 1, ry + 3, zb - 3, "air")
+            elif r < 0.75:                                 # a shade on four posts
+                for x in (bx0, bx0 + 2):
+                    for z in (zb - 3, zb - 1):
+                        for y in (ry + 2, ry + 3):
+                            t.set(x, y, z, th["fence"])
+                for x in range(bx0, bx0 + 3):
+                    for z in range(zb - 3, zb):
+                        t.set(x, ry + 4, z, f"{th['wool']}_wool" if (x + z) % 2 else f"{th['carpet'][0]}_wool")
         for x in range(1, W - 1, 2):
             if abs(x - dx) > 0:
                 t.set(x, ry, zf - 1, log(th["stripped"], "z"))
             t.set(x, ry, zb + 1, log(th["stripped"], "z"))
         if size == "large" and th["dome"]:
             dome(t, W // 2, fy + H + 2, zf + D // 2, 2, roofset(th["dome"])[2], finial="lightning_rod[facing=up]")
+    # --- what the household leaves by its door: a stack of firewood or a pile of cut stone, on one side of the step
+    if not s and rng.random() < 0.5:
+        px = rng.choice([1, W - 2])
+        if abs(px - dx) > 1 and t.get(px, 1, 1) is None:
+            t.set(px, 0, 1, th["found"])
+            t.set(px, 1, 1, log(th["log"], "x") if rng.random() < 0.6 else f"{roofset('cobblestone')[1]}[type=bottom]")
     # --- lantern under the eave next to the door (only if there is an eave)
     for yy in range(fy + 3, fy + H + 3):
         above = t.get(dx + 1, yy + 1, zf - 1)
@@ -261,9 +349,11 @@ def rect_house(th, rng, name, size, depth, tier, job):
     hx, hz = W - 2, zb - 1
     if chimney:
         cm = "bricks" if "brick" not in th["found"] else th["found"]
-        for y in range(fy + 1, top + 2):
+        # over the ridge on a gable; on a hip, two blocks over the roof where the stack comes through
+        ctop = top if kind != "hip" else max(y for (x, y, z), (bst, _) in t.blocks.items() if x == hx and z == hz and bst != "minecraft:air")
+        for y in range(fy + 1, ctop + 2):
             t.set(hx, y, hz, cm)
-        t.set(hx, top + 2, hz, "campfire[lit=true,signal_fire=false]")
+        t.set(hx, ctop + 2, hz, "campfire[lit=true,signal_fire=false]")
         t.set(hx, fy + 1, hz, "furnace[facing=north]")
     # --- interior
     front_clear = {(dx, zf + 1), (dx - 1, zf + 1), (dx + 1, zf + 1), (dx, zf + 2)}

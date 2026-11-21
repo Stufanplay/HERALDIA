@@ -16,14 +16,17 @@ One world (the owner's seed, large biomes, hard; the arena off), then:
      RAMP_SHARE of its columns in ramps and STEP_SHARE in bare steps, and no step over SLOW_MS ms on the server thread
      in the town's own build (herald/Building), in its roads or in its grounds: the same cap for all three, because a
      step is a tick and a tick of the town is as long a freeze for the player as a tick of the grounds;
-  4. the world read back (the server stopped): in the footprint, its margin and the ring, no block of water with air
-     beside or under it; in the ring, at most RAMP_SHARE of the natural columns' one-block steps in ramps (RAMP or more
-     the same way, each within RAMP_GAP columns of the next) and at most STEP_SHARE bare steps (more than one block, the
-     higher side not a retaining wall); on every road, no two side by side paved columns more than a block apart.
-Exit code 0 if everything passes.
+  4. the world read back (the server stopped): no block of the town waterlogged where its template is not (the pond the
+     town cuts into filled its own walls, stairs, slabs and lanterns, and nothing runs out of them until the first block
+     update beside them: no measure of water sees it in a fresh world); in the footprint, its margin and the ring, no
+     block of water with air beside or under it; in the ring, at most RAMP_SHARE of the natural columns' one-block steps
+     in ramps (RAMP or more the same way, each within RAMP_GAP columns of the next) and at most STEP_SHARE bare steps
+     (more than one block, the higher side not a retaining wall); on every road, no two side by side paved columns more
+     than a block apart.Exit code 0 if everything passes.
 """
-import argparse, json, os, re, shutil, sys, time
+import argparse, collections, gzip, io, json, os, re, shutil, sys, time, zipfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import nbtlib
 import server_smoke as s
 import existing_world as ew
 from guide import Server
@@ -33,7 +36,10 @@ from modrinth import fetch
 from herald_grounds import AUDIT, BUILT, HOUSE_BUILT, HOUSE_BY_KIND, SLOW_MS, ROADS_AUDIT, ROADS_BUILT, PLACED as PLACED_AT
 
 SEED, LEVEL_TYPE = "-2071092601429184301", "minecraft\\:large_biomes"
-SPAWN = (0, 91, 48)                 # where the owner's town stands (its ground at 90)
+# Where this test places the town by hand (`herald place here`; its ground at 90), on the owner's seed: steep land with a
+# pond across the wall's line, chosen for that. It is NOT where the game puts the town in a new world of that seed: the
+# site search, left to itself, picks 48 86 0 (dry, no dock). What is measured here is the hard case, not the owner's town.
+SPAWN = (0, 91, 48)
 P = "rep"                           # Carpet's player (it spawns lowercase)
 POND_DEPTH, POND_OVER = 5, 9
 RING, BLEND = 50, 4                 # herald/Grounds.RING; Outskirts.EDGE_BLEND (the natural ground's own rows)
@@ -171,17 +177,35 @@ def orphans(world, cols):
     return sorted(set(lost))
 
 
-def dry_decks(world, cols, town):
-    """Road walkways over no water: a column outside the town whose top is planks with no source water in the three
-    blocks under it (a bridge stands over a river's or a pond's water; these were laid over water that was only passing)."""
-    out = []
+HUT_AT = r"herald's house roads: hut \S+ \(\S+\) at (-?\d+) -?\d+ (-?\d+)"
+HOUSE_AT = r"herald's house grounds: house \S+ \(\S+\) at (-?\d+) -?\d+ (-?\d+)"
+HUT_REACH, HOUSE_REACH = 6, 10     # a 7 x 7 hut and a house of at most 11 x 11, turned any way about the corner the log gives
+TEMPLATE = "data/heraldia/structure/casa_heraldo/casa.nbt"      # the town's own template: its box is the footprint
+
+
+def roofs(log):
+    """Whether a column is under a roadside hut or a house of the grounds: (x, z) -> bool, from where the log says each
+    was placed. Their roofs and porches can be of planks too, and they are not road walkways."""
+    at = [(int(m.group(1)), int(m.group(2)), r) for pat, r in ((HUT_AT, HUT_REACH), (HOUSE_AT, HOUSE_REACH))
+          for m in re.finditer(pat, log)]
+    return lambda x, z: any(abs(x - bx) <= r and abs(z - bz) <= r for bx, bz, r in at)
+
+
+def dry_decks(world, cols, town, roof):
+    """Road walkways over no water: a column outside the town and off every hut and house whose top is planks with no
+    source water in the three blocks under it (a bridge stands over a river's or a pond's water; these were laid over
+    water that was only passing). Returns (those columns, how many plank tops were set aside as a building's)."""
+    out, aside = [], 0
     for (x, z), c in cols.items():
         if c is None or town(x, z) or not c[1].endswith("_planks"):
+            continue
+        if roof(x, z):
+            aside += 1
             continue
         under = [world.block(x, c[0] - k, z) or "" for k in (1, 2, 3)]
         if "water" not in under and not under[0].endswith("_fence"):     # a bridge's post down to the bottom is waterlogged
             out.append((x, c[0], z))
-    return out
+    return out, aside
 
 
 def ramps(cols, inside):
@@ -228,10 +252,76 @@ def pieces(paved):
     return out
 
 
-def read_back(p, work, box, ground_y):
+def own_waterlogged(jar):
+    """The town's template's own waterlogged cells (x, y, z from its origin): the only ones the town may leave full of water."""
+    with zipfile.ZipFile(jar) as z:
+        t = nbtlib.File.parse(io.BytesIO(gzip.decompress(z.read(TEMPLATE))))
+    wet = {i for i, e in enumerate(ew._blueprint(t["palette"])) if waterlogged(e)}
+    return {tuple(int(v) for v in b["pos"]) for b in t["blocks"] if int(b["state"]) in wet}
+
+
+def waterlogged(entry):
+    """Is this palette entry a waterlogged=true state? (26.3: a state without properties is a plain string.)"""
+    if not isinstance(entry, dict):
+        return False
+    props = entry.get("Properties") or entry.get("properties") or {}
+    return str(props.get("waterlogged", "")) == "true"
+
+
+def drowned(path, foot, own):
+    """The blocks of the footprint with waterlogged=true that the template does not have waterlogged: (x, y, z, block).
+
+    The pond the town cuts into is the one that fills them. StructureTemplate.placeInWorld keeps the water a cell held
+    by default: it sets the template's block and then puts that water back inside it if it can hold any (a wall, a
+    stair, a slab, a lantern), and the ones whose water was not a source are waterlogged again from any source beside
+    them.
+
+    Why no measure of water finds it: placeLiquid schedules a fluid tick, so the wall does pour, while the town is
+    still being built -- and the build's own shores step takes that water away again (on the .jar before the fix this
+    world cleared 347 blocks out of the footprint and dried 80 of running water; with it, 0 and 64). So the finished
+    world has no standing water, no running water without a source and no walkway over none of it, and every water
+    check passes over a wall that is still full of it. What is left is the waterlogged blocks, which pour again at the
+    first block update beside them. Read from the saved region files, so it measures the result and not what the mod
+    says it did."""
+    ox, oy, oz, mx, my, mz = foot
+    out, missing = [], 0
+    for cx in range(ox >> 4, (mx >> 4) + 1):
+        for cz in range(oz >> 4, (mz >> 4) + 1):
+            n = ew.read_chunk(path, cx, cz)
+            if n is None or not str(n.get("Status", "")).endswith("full"):
+                missing += 1
+                continue
+            for sec in n.get("sections", []):
+                sy = int(sec["Y"])
+                if sec.get("block_states") is None or (sy << 4) + 15 < oy or (sy << 4) > my:
+                    continue
+                bs = ew._blueprint(sec["block_states"])
+                if not any(waterlogged(e) for e in bs["palette"]):
+                    continue                        # nothing waterlogged in this section's palette at all
+                for i, (block, props) in enumerate(ew.states(bs)):
+                    if dict(props).get("waterlogged") != "true":
+                        continue
+                    y, z, x = (sy << 4) + (i >> 8), (cz << 4) + ((i >> 4) & 15), (cx << 4) + (i & 15)
+                    if oy <= y <= my and ox <= x <= mx and oz <= z <= mz and (x - ox, y - oy, z - oz) not in own:
+                        out.append((x, y, z, block.split(":")[-1]))
+    return sorted(out), missing
+
+
+def read_back(p, work, jar, foot, ground_y, log):
     """The world as it was saved, measured here (step 4)."""
     world = World(os.path.join(work, "world"))
-    ox, oz, mx, mz = box
+    ox, oz, mx, mz = foot[0], foot[2], foot[3], foot[5]
+    # the town's own blocks left full of water by the pond it cuts into: latent (nothing runs until a block update
+    # beside them), so neither the audit's standing water nor the running water with no source above sees them
+    own = own_waterlogged(jar)
+    wet_blocks, ungenerated = drowned(os.path.join(work, "world"), foot, own)
+    kinds = ", ".join(f"{n} {k}" for k, n in sorted(collections.Counter(b[3] for b in wet_blocks).items(),
+                                                    key=lambda kv: -kv[1])[:6])
+    print(f"READ BACK: the template has {len(own)} waterlogged cells; {len(wet_blocks)} waterlogged blocks in the footprint "
+          f"that it does not" + (f" ({kinds}), e.g. {wet_blocks[:5]}" if wet_blocks else ""), flush=True)
+    p.check(not ungenerated, f"read back: {ungenerated} chunks of the footprint are not saved full")
+    p.check(not wet_blocks, f"read back: {len(wet_blocks)} blocks of the town are waterlogged where its template is not "
+            f"({kinds}): {wet_blocks[:5]}")
     area = (ox - RING, oz - RING, mx + RING, mz + RING)
     cols = survey(world, area, ground_y - 70, ground_y + 60)
     town = lambda x, z: ox <= x <= mx and oz <= z <= mz
@@ -244,8 +334,9 @@ def read_back(p, work, box, ground_y):
     lost = orphans(world, cols)
     print(f"READ BACK: {len(lost)} blocks of running water with no source" + (f", e.g. {lost[:5]}" if lost else ""), flush=True)
     p.check(not lost, f"read back: {len(lost)} blocks of running water with no source in the town, its margin and the ring: {lost[:5]}")
-    decks = dry_decks(world, cols, town)
-    print(f"READ BACK: {len(decks)} walkway columns over no water" + (f", e.g. {decks[:5]}" if decks else ""), flush=True)
+    decks, aside = dry_decks(world, cols, town, roofs(log))
+    print(f"READ BACK: {len(decks)} walkway columns over no water ({aside} plank tops set aside: a hut's or a house's)"
+          + (f", e.g. {decks[:5]}" if decks else ""), flush=True)
     p.check(not decks, f"read back: {len(decks)} plank walkway columns with no water under them: {decks[:5]}")
     # the town does not lay a lawn on the desert: its margin and its forecourt keep the land's own ground
     out = lambda x, z: max(ox - x, x - mx, oz - z, z - mz, 0)
@@ -255,6 +346,13 @@ def read_back(p, work, box, ground_y):
     print(f"READ BACK: {lawn} of {len(edge)} land columns of the margin and the forecourt are grass", flush=True)
     p.check(len(edge) > 3000, f"read back: only {len(edge)} land columns in the margin and the forecourt")
     p.check(lawn <= LAWN_SHARE * len(edge), f"read back: {lawn} of {len(edge)} columns round the wall are grass on desert land")
+    # nor inside the wall: the town's own ground is the land's too (the crops keep their plots, the trees their pits)
+    yard = [c[1] for (x, z), c in cols.items() if c is not None and out(x, z) == 0 and z <= mz - FORECOURT
+            and (ground(c[1]) or c[1] in ("sand", "red_sand", "gravel", "mud"))]
+    green = sum(b == "grass_block" for b in yard)
+    print(f"READ BACK: {green} of {len(yard)} open ground columns inside the wall are grass", flush=True)
+    p.check(len(yard) > 3000, f"read back: only {len(yard)} open ground columns inside the wall")
+    p.check(green <= LAWN_SHARE * len(yard), f"read back: {green} of {len(yard)} columns inside the wall are grass on desert land")
     inside = {}
     for (x, z), c in cols.items():
         if c is None or town(x, z) or blend(x, z) or not ground(c[1]) or c[1] in PAVING or c[1] in KERB:
@@ -373,7 +471,7 @@ def main():
         if bad in ctx.log() and (bad != "step " or re.search(r"herald's house( grounds| roads)?: step .* failed", ctx.log())):
             fails.append(f"the log contains {bad!r}")
     if box:
-        read_back(p, a.work, (box[0], box[2], box[3], box[5]), ground_y)
+        read_back(p, a.work, os.path.abspath(a.jar), box, ground_y, ctx.log())
     print(f"HERALD STEEP: {time.monotonic() - t0:.0f} s;", "OK" if not fails else fails)
     return 1 if fails else 0
 
