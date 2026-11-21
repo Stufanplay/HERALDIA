@@ -386,7 +386,8 @@ def main():
     if last and os.path.isdir(world_dir):
         shut = [(u, p) for u, p in last.items() if shut_in(world_dir, p)]
         print(f"RUTAS: shut in at the last sample (its search cannot walk 12 blocks from where it is): {len(shut)} of "
-              f"{len(last)} villagers")
+              f"{len(last)} villagers (informative, no limit: whether it adds up day after day, and so what limit it "
+              f"needs, is not settled yet)")
         for u, p in shut:
             print(f"RUTAS:   shut in: {u[:8]} at {tuple(round(v, 1) for v in p)}")
     if fails:
