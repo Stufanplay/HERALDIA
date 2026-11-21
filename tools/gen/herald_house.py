@@ -1867,8 +1867,11 @@ def construct(dressed=True):
             dx, dz = OPEN_DIR[side]
             start = (x + dx, z + dz)
             t.paths.append((b.name, start, path(t, start, plots)))
+    t.trees = set()
     if dressed:
         herald_dress.lanes(t)
+        herald_dress.trees(t)
+        t.hedges, t.pots = herald_dress.hedges(t, blds)
     golems(t)
     t.blds = blds
     return t
@@ -2180,7 +2183,7 @@ def errors(t=None):
         e.append(f"casa_heraldo: size {t.size()} instead of {(N, HEIGHT, N)}")
     for (x, y, z), (st, _) in t.blocks.items():
         n = _name(st)
-        if any(n.startswith(f) or n.endswith(f) for f in FLAMMABLE):
+        if any(n.startswith(f) or n.endswith(f) for f in FLAMMABLE) and (x, y, z) not in getattr(t, "trees", ()):
             e.append(f"casa_heraldo: {n} burns ({x} {y} {z})")
     if _name(t.get(*BELL)) != "bell":
         e.append("casa_heraldo: no bell where the blueprint says")
