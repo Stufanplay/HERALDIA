@@ -9,6 +9,7 @@ from core import Template, nsid, NS
 from lint import passable
 from themes import THEMES, FAMILIES
 from houses import make_house, PROFS_HOUSE
+import streets
 from streets import (straight, crossroad, terminator_end, watchtower, gate, plaza, avenue, decor_piece, P)
 from specials import SPECIALS, VARIANTS
 from fillers import filler, villager_piece, golem_piece, rug_piece
@@ -139,9 +140,9 @@ def build_theme(reg, th, seed):
     reg.pool(f"{tid}/terminators", els)
     # ---- small decoration
     els = []
-    for k, w in [("lamp", 5), ("lamp_tall", 2), ("flower", 2)]:
+    for k, w in streets.DECOR_WEIGHTS:
         els.append((reg.add(decor_piece(th, rng, f"{tid}/decor/{k}", k), "decor"), w, "rigid", None))
-    els.append((None, 4, "rigid", None))
+    els.append((None, streets.DECOR_EMPTY, "rigid", None))
     reg.pool(f"{tid}/decor", els, fallback=f"{tid}/decor")
     # ---- casas
     els = []

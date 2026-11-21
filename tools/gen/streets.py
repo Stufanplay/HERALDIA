@@ -37,10 +37,27 @@ def golem_slot(t, x, y, z, final):
              joint="rollable", place=1)
 
 
+def _worn(x, z, k=0):
+    """A fixed pseudo-random number in [0, 1) for a cell (no draw from the theme's random source: the pieces built after
+    a street keep the choices they had)."""
+    h = (x * 73856093 ^ z * 19349663 ^ k * 83492791) & 0xFFFFFFFF
+    h = (h ^ (h >> 13)) * 1274126177 & 0xFFFFFFFF
+    return ((h ^ (h >> 16)) & 0xFFFF) / 65536.0
+
+
 def path_strip(t, th, rng, x0, x1, z0, z1):
+    """A street's ground: the theme's paving, with a kerb along both edges (the second paving material and, in runs, the
+    theme's stone) so that a street reads as laid and edged, not as a stripe. Flush with the paving: nothing to step over."""
+    along_x = x1 - x0 > z1 - z0
+    kerb = stone_like(th)
     for x in range(x0, x1 + 1):
         for z in range(z0, z1 + 1):
-            t.set(x, 0, z, paving(rng, th))
+            b = paving(rng, th)
+            edge = (z in (z0, z1)) if along_x else (x in (x0, x1))
+            if edge and x1 - x0 != z1 - z0:              # a crossing has no kerb: streets run through it
+                run = _worn((x if along_x else z) // 3, z if along_x else x, 7)        # the same stone for 3 cells along
+                b = kerb if run < 0.30 else th["path2"] if _worn(x, z, 9) < 0.75 else b
+            t.set(x, 0, z, b)
             t.set(x, 1, z, "air")
 
 
@@ -254,6 +271,11 @@ def avenue(th, rng, name, left_pool, right_pool):
 
 
 # ------------------------------------------------------------------ small decoration (1x1)
+STREET_THINGS = ("bench", "woodpile", "hay", "milestone")
+# The street's decoration slots: lamps keep 7 parts in 13, as before the street's things came (they took their share
+# from the empty slots and one of the planter's two), so a street is as lit as it was.
+DECOR_WEIGHTS = (("lamp", 5), ("lamp_tall", 2), ("flower", 1), ("bench", 1), ("woodpile", 1), ("hay", 1), ("milestone", 1))
+DECOR_EMPTY = 1
 def decor_piece(th, rng, name, kind):
     t = Template(name)
     if kind == "lamp":
@@ -264,6 +286,22 @@ def decor_piece(th, rng, name, kind):
         for y in (1, 2):
             t.set(0, y, 0, th["fence"])
         t.set(0, 3, 0, lantern(th, False))
+    elif kind in STREET_THINGS:
+        # what a lived-in street has beside its lamps: somewhere to sit, the winter's wood, fodder, a stone that says
+        # how far. One block wide like a lamp, no light, no container, nothing a villager takes for a workstation
+        foot = stone_like(th) if kind == "milestone" else th["path2"]
+        t.jigsaw(0, 0, 0, "down_north", "heraldia:bottom", "heraldia:slot", "minecraft:empty", final_state=nsfix(foot), joint="rollable")
+        if kind == "bench":
+            t.set(0, 1, 0, stairs(th["wstairs"], "north"))
+        elif kind == "woodpile":
+            t.set(0, 1, 0, log(th["log"], "x"))
+            if rng.random() < 0.5:
+                t.set(0, 2, 0, log(th["log"], "x"))
+        elif kind == "hay":
+            t.set(0, 1, 0, "hay_block[axis=y]")
+        else:
+            t.set(0, 1, 0, "cobblestone_wall[up=true,north=none,south=none,east=none,west=none,waterlogged=false]")
+            t.set(0, 2, 0, "stone_button[face=floor,facing=north,powered=false]")
     else:   # jardinera
         t.jigsaw(0, 0, 0, "down_north", "heraldia:bottom", "heraldia:slot", "minecraft:empty", final_state=nsfix(stone_like(th)), joint="rollable")
         t.set(0, 1, 0, potted(rng.choice(th["plants"])))
