@@ -211,6 +211,33 @@ settles the shape of any threshold for exploring: **an absolute 100 ms limit on 
 of vanilla**. The only workable form is relative — the mod may not add more than N ticks above the value
 compared with the pass without it.
 
+## The town's build, step by step
+
+Worst step of each kind on the owner's seed (`-2071092601429184301`, `minecraft:large_biomes`) with
+`tools/smoke/herald_steep.py`, three passes each, clock with the server thread's own CPU beside it. The last
+column is the merged tree: `develop`'s `common/Placing.dry` and the design pass of phase 2b, both of which land
+inside the same `TEMPLATE` step.
+
+| kind of step | on `develop` | with the fix | with design 2b inside | what it was |
+| --- | --- | --- | --- | --- |
+| LOAD | 935 / 335 / 625 ms (45 / 12 / 20 of CPU) | 0 / 0 / 0 | 0 / 0 / 0 | waiting for a chunk asked for synchronously |
+| TEMPLATE | 112 / 109 / 87 ms (105 / 86 / 78 of CPU) | 71 / 73 / 64 | **56 / 50 / 70** | the first villager (87 ms) on top of a 26 ms step |
+| BEDS | 178 / 164 / 200 ms, in **one** step | 14 / 13 / 38 over 16 steps | 22 / 14 / 22 | one pass over the whole template per kind of bed |
+| ROAD | 174 / 168 / 233 ms (13 / 7 / 7 of CPU), 4 steps | 0 / 0 / 0 over 16 steps | 0 / 0 / 0 | waiting for the ring's land to be generated |
+| LEVEL | 27 / 48 / 39 ms | 34 / 43 / 29 | **66 / 54 / 49** (24 / 33 / 18 of it waiting) | reads its chunk with a blocking `getChunk`, deliberately outside the prefetch |
+| FINISH | never measured before | 0-18 ms | 18 / 29 / 14 | — |
+| SHORE, DRY, DOCK, SIGN | 0-16 ms | 0-18 ms | 0-4 ms | unchanged |
+| **slowest step of the build** | **935 / 335 / 625 ms** | **71 / 73 / 64 ms** | **66 / 54 / 70 ms** | |
+
+Total on the server thread: 3,985 / 3,390 / 3,834 ms over 514 ticks on `develop`, 2,708 / 2,488 / 2,597 over 546
+with the fix, 2,715 / 2,663 / 3,233 over 546 with 2b inside.
+
+Inside the `TEMPLATE` step, timed part by part with a temporary probe (one pass, 64 steps): `placeInWorld`
+19.7 ms at the median and 63.7 at worst; **`interior()`, which is what phase 2b adds, 0.2 ms at the median and
+0.6 at worst**, 11.7 ms over the whole build; `exterior()` 0.3 ms at worst; and the walk over the whole template
+on its own 10.1 / 40.3 ms — a **lower bound**, because the probe's second call finds the template warm in cache
+while the real one pays it cold.
+
 ## Method, and what it does not cover
 
 - Per-tick durations read from the server's own JMX bean **from outside the game**, so the figures mean the
