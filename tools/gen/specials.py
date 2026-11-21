@@ -130,6 +130,58 @@ def bell_gable(t, th, nth, cx, z, y, stone):
     t.set(cx, y + 5, z, slab(th["roof_slab"]))
 
 
+# How a chapel carries its bell, by the land it stands in. The twelve styles that share the chapel had one silhouette, a
+# tower in front of a nave; three of them now, and no ladder in any (a villager climbs a ladder by walking into it and
+# cannot plan the way down).
+BELL_CARRIER = {"bosque": "bellcote", "taiga": "bellcote", "costa": "bellcote", "pantano": "bellcote",
+                "sabana": "frame", "jungla": "frame", "oscuro": "stub", "badlands": "stub"}
+
+
+def chapel_porch(t, th, nth, cx, z0, z1, stone):
+    """An open porch in front of a door: posts, a gable over them, the ground paved."""
+    for z in range(z0, z1 + 1):
+        for x in range(cx - 2, cx + 3):
+            t.set(x, 0, z, stone_of(th))
+        for x in (cx - 2, cx + 2):
+            for y in range(1, 4):
+                t.set(x, y, z, log(th["log"], "y") if not stone else nth["wall2"])
+    gable_roof(t, th, cx - 2, z0, cx + 2, z1, 4, along="z", overhang=0, gable_fill=nth["wall"])
+    for x in range(cx - 1, cx + 2):
+        for z in range(z0, z1 + 1):
+            for y in range(1, 4):
+                t.set(x, y, z, "air")
+
+
+def bell_frame(t, th, x, z):
+    """A bell hung in the open from a timber frame: two posts three blocks apart along x, a beam, a little roof."""
+    for px in (x, x + 2):
+        t.set(px, 0, z, stone_of(th))
+        for y in range(1, 5):
+            t.set(px, y, z, log(th["log"], "y"))
+    t.set(x + 1, 0, z, stone_of(th))
+    for px in range(x, x + 3):
+        t.set(px, 5, z, log(th["log"], "x"))
+        for dz in (-1, 0, 1):
+            t.set(px, 6, z + dz, slab(th["roof_slab"]))
+    t.set(x + 1, 4, z, "bell[attachment=ceiling,facing=north]")
+
+
+def stub_tower(t, th, nth, stone, tx0, tz0, tw, top):
+    """A squat tower that just clears the nave's ridge: thick walls, the bell in an opening under a battlement, no way up."""
+    bell_tower(t, th, nth, stone, tx0, tz0, tw, top)
+    cx = tx0 + tw // 2
+    t.fill(tx0 + 1, top - 2, tz0 + 1, tx0 + tw - 2, top - 2, tz0 + tw - 2, th["planks"])       # the belfry's floor
+    for (x, z) in ((cx, tz0), (cx, tz0 + tw - 1), (tx0, tz0 + tw // 2), (tx0 + tw - 1, tz0 + tw // 2)):
+        t.set(x, top - 1, z, "air")
+    t.fill(tx0, top, tz0, tx0 + tw - 1, top, tz0 + tw - 1, stone_of(th) if stone else th["planks"])
+    t.set(cx, top - 1, tz0 + tw // 2, "bell[attachment=ceiling,facing=north]")
+    wall = t.get(tx0, 1, tz0)
+    for x in range(tx0, tx0 + tw):
+        for z in range(tz0, tz0 + tw):
+            if (x in (tx0, tx0 + tw - 1) or z in (tz0, tz0 + tw - 1)) and (x + z) % 2 == 0:
+                t.set(x, top + 1, z, wall)
+
+
 def church(th, rng, name, v=0):
     """v: 0 front tower (the original), 1 transept with bell gable on the facade, 2 porch and tower at the head."""
     style = th["church"]
@@ -139,6 +191,7 @@ def church(th, rng, name, v=0):
         return pagoda_temple(th, rng, name, v)
     t = Template(name)
     stone = style in ("romanesque", "gothic", "domed")
+    carrier = BELL_CARRIER.get(th["family"]) if style == "chapel" else None
     W = 11 if style != "chapel" else 9
     D = 21 if style != "chapel" else 17
     if v == 2:
@@ -197,7 +250,22 @@ def church(th, rng, name, v=0):
         for x in (-2, W + 1):
             for y in range(3, H - 1):
                 t.set(x, y, ta0 + 2, gl)
-    if v == 0:
+    if v == 0 and carrier in ("bellcote", "frame"):
+        # no tower: a porch before the door, and the bell on the gable or on a frame in the open beside the porch
+        chapel_porch(t, th, nth, cx, 2, nz0 - 1, stone)
+        door(t, cx, 1, nz0, th["door"], "north")
+        if carrier == "bellcote":
+            ridge = max(y for (x, y, z) in t.blocks if x == cx and z == nz0)
+            bell_gable(t, th, nth, cx, nz0, ridge + 1, stone)
+        else:
+            bell_frame(t, th, cx + 3, 3)
+    elif v == 0 and carrier == "stub":
+        tx0 = cx - 2
+        stub_tower(t, th, nth, stone, tx0, tz0, tw, H + 6)
+        for y in range(1, 4):
+            t.set(cx, y, tz0 + tw - 1, "air")
+        door(t, cx, 1, tz0, th["door"], "north")
+    elif v == 0:
         # torre
         tx0 = cx - 2
         th_h = H + 11
@@ -229,10 +297,20 @@ def church(th, rng, name, v=0):
                     t.set(x, y, z, "air")
         door(t, cx, 1, nz0, th["door"], "north")
         tx0, th_h = cx - 2, H + 12
-        bell_tower(t, th, nth, stone, tx0, nz1, tw, th_h)
-        t.fill(tx0 + 1, 1, nz1 + 1, tx0 + 3, 1, nz1 + 3, stone_of(th))
-        door(t, cx + 1, 2, nz1, th["door"], "south")
-        bell_tower_top(t, th, tx0, nz1, tw, th_h, ladder_y0=2)
+        if carrier == "bellcote":                     # the bell over the chancel's gable, nothing behind the head
+            ridge = max(y for (x, y, z) in t.blocks if x == cx and z == nz1)
+            bell_gable(t, th, nth, cx, nz1, ridge + 1, stone)
+        elif carrier == "frame":                      # the bell on its frame behind the head
+            bell_frame(t, th, cx - 1, nz1 + 2)
+        elif carrier == "stub":
+            stub_tower(t, th, nth, stone, tx0, nz1, tw, H + 6)
+            t.fill(tx0 + 1, 1, nz1 + 1, tx0 + 3, 1, nz1 + 3, stone_of(th))
+            door(t, cx + 1, 2, nz1, th["door"], "south")
+        else:
+            bell_tower(t, th, nth, stone, tx0, nz1, tw, th_h)
+            t.fill(tx0 + 1, 1, nz1 + 1, tx0 + 3, 1, nz1 + 3, stone_of(th))
+            door(t, cx + 1, 2, nz1, th["door"], "south")
+            bell_tower_top(t, th, tx0, nz1, tw, th_h, ladder_y0=2)
     if style == "domed":
         dm = roofset(th["dome"] or "copper")[2]
         dome(t, cx, top, (ta0 + 2) if v == 1 else nz0 + D // 2, 4, dm, finial="lightning_rod[facing=up]")
