@@ -9,7 +9,16 @@ only as figures in a conversation, and nobody could tell them from guesses six m
 
 ## The conclusion in one sentence
 
-**The only place in the mod where the server thread genuinely waits is `/locate` of a Heraldia structure.**
+**The only unbounded wait on the server thread is `/locate` of a Heraldia structure.**
+
+The town's own build waits too, and that is a correction to the first version of this document, which said
+`/locate` was the only place that waits at all. It is not: the `LEVEL` step of `herald/Building` reads its
+chunk with a blocking `getChunk` and is deliberately left out of the prefetch (asking for those chunks keeps
+them loaded, and then `Shores` banks a pond instead of draining it — see `LESSONS.md`). Measured with the
+clock beside the thread's own CPU, three passes: the worst `LEVEL` step is 66 / 54 / 49 ms of which 24 / 33 /
+18 ms is waiting. The difference from `/locate` is that this wait is bounded by one step per tick and by the
+100 ms cap the test enforces, and it happens once per world while the town is built; `/locate`'s is neither
+bounded nor once.
 
 Everything else that looked like a candidate either does not wait, or waits on another thread. That list is
 worth as much as the finding, because it says where not to look again:
@@ -28,7 +37,7 @@ worth as much as the finding, because it says where not to look again:
 | the four `CHUNK_LOAD` handlers | `VillageEvents`, `ClearedSpawners`, `WebMaps`, `Welcome`; each exits early on an empty collection | code |
 | `HeightCache` locks | 64 bands; the critical section is one hashmap operation and the height computation runs **outside** the lock | code |
 | `UnwrittenRegions` lock | set operations only; its one `Files.isRegularFile` per region runs outside the lock | code |
-| the builds' blocking `level.getChunk` (town, grounds, roads, arena) | all capped at one step or one chunk per tick; measured in brand-new worlds: slowest step 71-75 ms (town), 17-21 ms (roads), 6-10 ms (grounds) | measured, three new worlds |
+| the builds' blocking `level.getChunk` (town, grounds, roads, arena) | waits, but bounded: one step or one chunk per tick, under the 100 ms cap. Measured on the merged tree, three passes: slowest step 66 / 54 / 70 ms (town), 17 / 25 / 26 ms (roads), 8 / 6 / 9 ms (grounds); of the town's worst `LEVEL` step, 24 / 33 / 18 ms is waiting | measured, three passes |
 
 File I/O that *can* land on the server thread, all of it operator-triggered and none of it per-tick:
 `HeraldiaConfig.save` from the config panel, and the plan and report writes of the `/heraldia update` command.

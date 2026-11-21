@@ -598,8 +598,9 @@ final class Building {
 
 	/**
 	 * One chunk's part of the template. A chunk a step on purpose, neither smaller nor larger: {@code placeInWorld} walks
-	 * the whole template on every call whatever its bounding box holds (557,056 entries for this one, 20.6 ms of the server
-	 * thread at the median and 47.9 at worst, measured with a box that holds nothing), so smaller boxes pay that walk more
+	 * the whole template on every call whatever its bounding box holds (10.1 ms of the server thread at the median and 40.3
+	 * at worst, measured with a second call in the same step whose box holds nothing, so warm and therefore a lower bound;
+	 * the whole call is 19.7 ms at the median and 63.7 at worst), so smaller boxes pay that walk more
 	 * often -- four 8 x 8 cells per chunk took the phase from 1.9 to 6.2 s and still left an 86 ms step -- and larger ones
 	 * stop the shape-update pass running along the chunk borders inside the town, which can move a block (docs/LESSONS.md).
 	 */
