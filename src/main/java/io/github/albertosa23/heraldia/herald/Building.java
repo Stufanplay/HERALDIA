@@ -1,6 +1,7 @@
 package io.github.albertosa23.heraldia.herald;
 
 import io.github.albertosa23.heraldia.command.Texts;
+import io.github.albertosa23.heraldia.common.Placing;
 import io.github.albertosa23.heraldia.roads.BuiltRoads;
 import io.github.albertosa23.heraldia.roads.RoadProfile;
 import java.util.ArrayList;
@@ -17,6 +18,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.tags.BlockTags;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.ExperienceOrb;
 import net.minecraft.world.entity.Mob;
@@ -52,7 +54,9 @@ import org.slf4j.LoggerFactory;
  * <li>level: inside the footprint, air above the template up to the top of the terrain and stone under the foundation
  * down to the ground (over water or a hollow); in the {@link Siting#MARGIN} around it, the terrain blended from the
  * house's ground to the natural height (a slope of dirt and grass, not a cliff);</li>
- * <li>template: the chunk's part of the template, with its villagers, horses and golem;</li>
+ * <li>template: the chunk's part of the template, with its villagers, horses and golem; placed dry
+ * ({@link io.github.albertosa23.heraldia.common.Placing#dry}), so a pond the piece falls into does not leave its
+ * walls, stairs and lanterns waterlogged;</li>
  * <li>beds: every bed set again, both halves (a bed across a chunk border is lost when its chunks are placed one by
  * one);</li>
  * <li>shores: no still water left standing in the air in the footprint or its margin (a pond the template or the blended
@@ -303,9 +307,42 @@ final class Building {
 		BoundingBox bb = new BoundingBox(Math.max(g.ox(), p.cx() << 4), g.oy(), Math.max(g.oz(), p.cz() << 4),
 				Math.min(g.maxX(), (p.cx() << 4) + 15), g.maxY(), Math.min(g.maxZ(), (p.cz() << 4) + 15));
 		BlockPos origin = new BlockPos(g.ox(), g.oy(), g.oz());
-		t.placeInWorld(level, origin, origin, new StructurePlaceSettings().setBoundingBox(bb).setIgnoreEntities(false)
-				.setFinalizeEntities(false), level.getRandom(), FLAGS);
+		t.placeInWorld(level, origin, origin, Placing.dry(new StructurePlaceSettings().setBoundingBox(bb).setIgnoreEntities(false)
+				.setFinalizeEntities(false)), level.getRandom(), FLAGS);
 		exterior(level, g, bb);
+		interior(level, g, bb);
+	}
+
+	/**
+	 * Inside the wall too, the town stands on the land's own ground: off grassland the template's lawn takes the land's
+	 * surface (sand in a desert, red sand on badlands, gravel on stone, mud in a swamp), wherever nothing that grows
+	 * stands on it. The crops keep their farmland. On sand a flower has no soil to live on: its bed becomes a dry garden
+	 * (a dead bush in one bed of three, bare sand in the others). On grassland nothing changes.
+	 */
+	private static void interior(ServerLevel level, Grounds g, BoundingBox bb) {
+		RoadProfile.Ground kind = dominant();
+		if (kind == RoadProfile.Ground.DIRT) {
+			return;
+		}
+		boolean dry = kind == RoadProfile.Ground.SAND || kind == RoadProfile.Ground.RED;
+		BlockState surface = surface(kind), air = Blocks.AIR.defaultBlockState(), bush = Blocks.DEAD_BUSH.defaultBlockState();
+		BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+		int y = g.groundY();
+		for (int x = bb.minX(); x <= bb.maxX(); x++) {
+			for (int z = bb.minZ(); z <= bb.maxZ(); z++) {
+				if (!level.getBlockState(pos.set(x, y, z)).is(Blocks.GRASS_BLOCK)) {
+					continue;
+				}
+				BlockState over = level.getBlockState(pos.set(x, y + 1, z));
+				if (over.is(BlockTags.FLOWERS) || over.is(BlockTags.SAPLINGS) || over.is(BlockTags.CROPS)) {
+					if (!dry || !over.is(BlockTags.SMALL_FLOWERS)) {
+						continue;       // it keeps its soil
+					}
+					level.setBlock(pos, Math.floorMod(x * 73856093 ^ z * 83492791, 3) == 0 ? bush : air, FLAGS);
+				}
+				level.setBlock(pos.set(x, y, z), surface, FLAGS);
+			}
+		}
 	}
 
 	/**

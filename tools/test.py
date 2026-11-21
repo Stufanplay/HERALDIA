@@ -252,6 +252,9 @@ MAP = [
     (JAVA + "herald/Outskirts*.java", HERALD_GROUNDS + SPAWN_ROADS + HERALD_STEEP), ("tools/gen/herald_grounds.py", HERALD_GROUNDS + SPAWN_ROADS),
     # the town's build (its shores) and the shores' own code: the town placed by the arena's test too
     (JAVA + "herald/Shores.java", HERALD_STEEP + HERALD_GROUNDS), (JAVA + "herald/Building.java", HERALD_STEEP + HERALD_GROUNDS + ["tools/smoke/arena.py"]),
+    # how our builds put a template into the world (no block of it waterlogged by the water already there): the town, its
+    # grounds' houses and the huts of its roads
+    (JAVA + "common/Placing.java", HERALD_STEEP + HERALD_GROUNDS + SPAWN_ROADS + ["tools/smoke/arena.py"]),
     (JAVA + "roads/*", ["tools/smoke/roads.py"]), ("tools/gen/roads.py", ["tools/smoke/roads.py"]),
     # common code: full suite
     ("tools/gen/uniques/_common/*", FULL), ("tools/gen/uniques/__init__.py", FULL), ("tools/gen/writer.py", FULL),
