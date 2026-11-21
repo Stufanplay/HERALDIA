@@ -4,27 +4,38 @@ import io.github.albertosa23.heraldia.command.Texts;
 import io.github.albertosa23.heraldia.common.Placing;
 import io.github.albertosa23.heraldia.roads.BuiltRoads;
 import io.github.albertosa23.heraldia.roads.RoadProfile;
+import java.lang.management.ManagementFactory;
+import java.lang.management.ThreadMXBean;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import net.minecraft.util.ProblemReporter;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntitySpawnReason;
+import net.minecraft.world.entity.EntitySpawnRequest;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.ExperienceOrb;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.DyeColor;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.Block;
@@ -37,10 +48,12 @@ import net.minecraft.world.level.block.entity.SignText;
 import net.minecraft.world.level.block.entity.SignTextSlot;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructurePlaceSettings;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
+import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.phys.AABB;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -48,7 +61,12 @@ import org.slf4j.LoggerFactory;
 
 /**
  * Building the Herald's House, spread over ticks as the arena's works are (arena/Works): each tick handles a single
- * chunk or a single road. Phases:
+ * chunk, one kind of bed or a chunk's worth of one road. The steps that used to wait for a chunk on the server thread
+ * (loading the ground, and the roads out of the gates, which reach land nothing has generated yet) now ask for theirs
+ * {@link #AHEAD} steps ahead and let the worker threads read or generate them, as the grounds do in {@link Outskirts};
+ * a step whose chunks are not there yet simply does not run this tick. The rest read what the load phase has already
+ * loaded, as they always did: asking for a chunk keeps it loaded, and {@link Shores} banks a body of water instead of
+ * draining it when it reaches as far as a loaded chunk, so holding more of them would change the town. Phases:
  * <ol>
  * <li>load (and generate, if needed) the chunks of the footprint and its margin and their neighbours;</li>
  * <li>level: inside the footprint, air above the template up to the top of the terrain and stone under the foundation
@@ -58,12 +76,12 @@ import org.slf4j.LoggerFactory;
  * ({@link io.github.albertosa23.heraldia.common.Placing#dry}), so a pond the piece falls into does not leave its
  * walls, stairs and lanterns waterlogged;</li>
  * <li>beds: every bed set again, both halves (a bed across a chunk border is lost when its chunks are placed one by
- * one);</li>
+ * one), one kind of bed per step (reading one kind out of the template is a pass over all its blocks);</li>
  * <li>shores: no still water left standing in the air in the footprint or its margin (a pond the template or the blended
  * margin cut open drains, a bigger body gets a bank: {@link Shores}), and in the footprint no water but the template's
  * (what a pond or a lake beside it let run in when the template's edge was placed);</li>
- * <li>roads: from each gate, a dirt path through the protected ring with a signpost at its end; the first gate that
- * meets water within reach gets the dock instead.</li>
+ * <li>roads: from each gate, a dirt path through the protected ring with a signpost at its end, {@link #ROAD_RUN}
+ * blocks of it per step; the first gate that meets water within reach gets the dock instead (a step of its own).</li>
  * </ol>
  * When done, loose items in the box are removed, players and other people's animals in the box go to the plaza, the
  * house is saved in the world and starts being protected. Never per tick when nothing is being built (one field check).
@@ -80,22 +98,52 @@ final class Building {
 	private static final int LOOK_DOWN = 4;
 	/** The foundation's outermost columns built as masonry (the wall's thickness). */
 	private static final int EDGE = 4;
+	/** A step over this many ms is logged on its own, with the thread's own CPU time beside the clock's (as the grounds do). */
+	private static final int SLOW_MS = 40;
+	/** How many chunks of the steps to come are asked for ahead, so no step has to wait for one on the server thread. */
+	private static final int AHEAD = 6;
+	/** After this many ticks waiting for the chunks of a step, it runs anyway (a world that will not hand them over). */
+	private static final int MAX_WAIT = 400;
+	/** How many blocks of one road a single step walks and paves: a chunk's worth of it. */
+	static final int ROAD_RUN = 16;
 	/** How many of the margin's columns stand on each kind of land (the town's forecourt takes the commonest). */
 	private static final int[] census = new int[RoadProfile.Ground.values().length];
 
-	private enum Phase { LOAD, LEVEL, TEMPLATE, BEDS, SHORE, DRY, ROAD }
+	private enum Phase { LOAD, LEVEL, TEMPLATE, BEDS, SHORE, DRY, ROAD, DOCK, SIGN, FINISH }
 
-	private record Step(Phase phase, int cx, int cz, @Nullable String side) {
+	/**
+	 * One step of the build. For the phases that work a chunk at a time, {@code a} and {@code b} are its chunk's
+	 * coordinates; for {@link Phase#BEDS}, {@code a} is which of the game's kinds of bed ({@link Work#bedKinds});
+	 * for {@link Phase#ROAD}, the first and the last block of the stretch out of {@code side}'s gate; for
+	 * {@link Phase#DOCK}, the column of the shore the dock is laid from.
+	 */
+	private record Step(Phase phase, int a, int b, @Nullable String side) {
+	}
+
+	/** How far one gate's road has got: the last block it reached, and whether water has stopped it short. */
+	private static final class Road {
+		int reached = Grounds.RING;
+		boolean stopped;
 	}
 
 	private record Work(ServerLevel level, Grounds g, @Nullable ServerPlayer who, boolean newWorld, List<Step> steps,
-			StructureTemplate template) {
+			StructureTemplate template, List<Block> bedKinds, Map<String, Road> roads,
+			Map<Long, CompletableFuture<?>> loading) {
 	}
 
 	private static @Nullable Work actual;
-	private static int index, ticks;
+	private static int index, ticks, waited, bedHalves;
 	private static long nanos;
+	/** The longest step: the clock's time, the server thread's own CPU time in it, and which step it was. */
+	private static long worst, worstCpu;
+	private static String worstStep = "";
+	// per kind of step: how many, the clock's time and the server thread's own CPU time, in all and of the longest one
+	private static final int[] kindSteps = new int[Phase.values().length];
+	private static final long[] kindNanos = new long[Phase.values().length], kindCpu = new long[Phase.values().length];
+	private static final long[] kindWorst = new long[Phase.values().length], kindWorstCpu = new long[Phase.values().length];
 	private static boolean docked;
+	/** The height of the shore the dock is laid from (its column is the {@link Phase#DOCK} step's own). */
+	private static int dockY;
 	private static Shores.Settled settled = Shores.NONE;
 	private static int cleared, dried;
 	/** The template's own water blocks (world positions), kept by the shores' step. */
@@ -108,6 +156,46 @@ final class Building {
 		return actual != null;
 	}
 
+	/**
+	 * Two villagers made and thrown away, when the server starts. The first villager a server ever makes costs the server
+	 * thread 76 ms, and the first one read from a tag 11 ms more (measured one step at a time on the development
+	 * container, 4 cores; a second villager costs 1 ms): the classes of the brain and of every behaviour in it are loaded,
+	 * the brain is built, and the save format's codecs are read for the first time. Whichever {@link Phase#TEMPLATE} step
+	 * placed the town's first villager paid all of that on top of its own work: that chunk's step was the slowest of the
+	 * build in four runs of four, 87-120 ms where the other 63 chunks took 26 ms, and a step may take 100 ms. Paid here
+	 * instead, in a tick nobody is playing through, the slowest step of the build is 52-68 ms (three passes, with design
+	 * 2b inside) and which chunk it falls on moves from run to run, most of it the collector and not this thread's own
+	 * work.
+	 * <p>
+	 * <strong>Declared, because no check sees it:</strong> this is 94-235 ms (median about 125, twelve runs) in a single
+	 * tick, once per world, with nobody connected, and it is <em>outside</em> the 100 ms-per-step cap that
+	 * {@code tools/smoke/herald_steep.py} enforces -- the cap reads the build's own steps, and this is not one. It is
+	 * over that cap on its own. That is the trade on purpose: the alternative is paying the same cost inside a
+	 * {@code TEMPLATE} step, where it breached the cap (87-120 ms on top of 26 ms of real work) and where it landed on
+	 * whichever chunk happened to hold the first villager. The owner's criterion is the fluidity of play, and this tick
+	 * happens before anyone can be playing. It is put on the server's task queue by {@code HeraldHouse.onStart} rather
+	 * than run inside {@code SERVER_STARTED}, for the ordering reason recorded there.
+	 * <p>
+	 * Both are made the way {@code StructureTemplate.placeInWorld} makes the town's: one from nothing, one from a tag,
+	 * which is the path every entity of a template takes. Neither is ever added to the world, so nothing is left behind
+	 * and no other mod's entity hook sees them (adding and discarding one as well was measured at 2 ms more: not worth
+	 * the visit). Every other kind of entity the town holds -- horse, donkey, item frame, cat, iron golem, chicken,
+	 * sheep, armour stand -- costs 0-2 ms the first time, so none of them is warmed up; one added later that did cost
+	 * would show up as a slow step in the build's own report, not in silence.
+	 */
+	static void warmUp(ServerLevel level) {
+		long t0 = System.nanoTime();
+		if (EntityTypes.VILLAGER.create(level, EntitySpawnReason.STRUCTURE) == null) {
+			return;
+		}
+		CompoundTag tag = new CompoundTag();
+		tag.putString("id", EntityType.getKey(EntityTypes.VILLAGER).toString());
+		EntityType.create(TagValueInput.create(ProblemReporter.DISCARDING, level.registryAccess(), tag), level,
+				new EntitySpawnRequest(EntitySpawnReason.STRUCTURE, false));
+		LOGGER.info("Heraldia: herald's house: a villager's brain and the save format read once, and thrown away, in {} ms (they would "
+				+ "otherwise fall on whichever step of a town's build placed the first villager)", (System.nanoTime() - t0) / 1_000_000);
+	}
+
 	/** Starts building {@code g}. False if the template is missing. */
 	static boolean start(ServerLevel level, Grounds g, @Nullable ServerPlayer who, boolean newWorld) {
 		Identifier id = Identifier.parse(g.plan().template());
@@ -116,19 +204,41 @@ final class Building {
 			LOGGER.error("Heraldia: herald's house: missing template {}", id);
 			return false;
 		}
+		long c0 = cpuNanos(), t0 = System.nanoTime();
 		List<Step> steps = new ArrayList<>();
 		chunks(steps, Phase.LOAD, g, Siting.MARGIN + 16);
 		chunks(steps, Phase.LEVEL, g, Siting.MARGIN);
 		chunks(steps, Phase.TEMPLATE, g, 0);
-		steps.add(new Step(Phase.BEDS, 0, 0, null));
+		// one step per kind of bed the game knows, whatever the town holds: both halves of a bed are the same block, so
+		// each step still sets whole beds, and reading one kind out of the template is one pass over all its blocks
+		List<Block> bedKinds = new ArrayList<>();
+		for (Block b : BuiltInRegistries.BLOCK) {
+			if (b instanceof BedBlock) {
+				bedKinds.add(b);
+			}
+		}
+		for (int i = 0; i < bedKinds.size(); i++) {
+			steps.add(new Step(Phase.BEDS, i, 0, null));
+		}
 		chunks(steps, Phase.SHORE, g, Siting.MARGIN);
 		chunks(steps, Phase.DRY, g, Siting.MARGIN);     // once every chunk's water is settled: what ran out of it and has no source
+		Map<String, Road> roads = new HashMap<>();
 		for (String side : g.plan().gates().keySet()) {
-			steps.add(new Step(Phase.ROAD, 0, 0, side));
+			roads.put(side, new Road());
+			for (int from = 1; from <= Grounds.RING; from += ROAD_RUN) {
+				steps.add(new Step(Phase.ROAD, from, Math.min(from + ROAD_RUN - 1, Grounds.RING), side));
+			}
+			steps.add(new Step(Phase.SIGN, 0, 0, side));
 		}
-		actual = new Work(level, g, who, newWorld, steps, t.get());
-		index = ticks = 0;
-		nanos = 0;
+		actual = new Work(level, g, who, newWorld, steps, t.get(), List.copyOf(bedKinds), roads, new HashMap<>());
+		index = ticks = waited = bedHalves = 0;
+		nanos = worst = worstCpu = 0;
+		worstStep = "";
+		java.util.Arrays.fill(kindSteps, 0);
+		java.util.Arrays.fill(kindNanos, 0);
+		java.util.Arrays.fill(kindCpu, 0);
+		java.util.Arrays.fill(kindWorst, 0);
+		java.util.Arrays.fill(kindWorstCpu, 0);
 		docked = false;
 		settled = Shores.NONE;
 		cleared = dried = 0;
@@ -139,9 +249,14 @@ final class Building {
 			own.add(info.pos());
 		}
 		ownWater = Set.copyOf(own);
+		long ns = System.nanoTime() - t0, cpu = c0 < 0 ? -1 : cpuNanos() - c0;
+		LOGGER.info("Heraldia: herald's house: {} steps planned in {} ms ({} of them the server thread's own work), {} blocks of water "
+				+ "of the template's own", steps.size(), ns / 1_000_000, cpu < 0 ? "? (not measured here)" : cpu / 1_000_000 + " ms",
+				ownWater.size());
 		return true;
 	}
 
+	/** Every chunk of the footprint and {@code m} blocks around it, one step each. */
 	private static void chunks(List<Step> steps, Phase phase, Grounds g, int m) {
 		for (int cx = (g.ox() - m) >> 4; cx <= (g.maxX() + m) >> 4; cx++) {
 			for (int cz = (g.oz() - m) >> 4; cz <= (g.maxZ() + m) >> 4; cz++) {
@@ -155,34 +270,222 @@ final class Building {
 		if (o == null) {
 			return;
 		}
-		long t0 = System.nanoTime();
 		ticks++;
 		if (index < o.steps().size()) {
-			Step p = o.steps().get(index++);
-			switch (p.phase()) {
-				case LOAD -> o.level().getChunk(p.cx(), p.cz());
-				case LEVEL -> level(o.level(), o.level().getChunk(p.cx(), p.cz()), o.g());
-				case TEMPLATE -> template(o.level(), p, o.g(), o.template());
-				case BEDS -> beds(o.level(), o.g(), o.template());
-				case SHORE -> {
-					LevelChunk c = o.level().getChunk(p.cx(), p.cz());
-					cleared += Shores.clear(o.level(), c, (x, z) -> o.g().inColumns(x, z), ownWater, o.g().oy(), o.g().maxY());
-					settled = settled.plus(Shores.settle(o.level(), c, (x, z) -> outside(o.g(), x, z) <= Siting.MARGIN));
-				}
-				case DRY -> dried += Shores.dry(o.level(), o.level().getChunk(p.cx(), p.cz()));
-				case ROAD -> road(o.level(), o.g(), p.side());
+			Step p = o.steps().get(index);
+			prefetch(o);
+			if (!ready(o, p)) {
+				return;                            // its chunks are being read or generated off the server thread
 			}
-			nanos += System.nanoTime() - t0;
+			waited = 0;
+			index++;
+			long c0 = cpuNanos(), t0 = System.nanoTime();
+			try {
+				step(o, p);
+			} catch (RuntimeException e) {
+				LOGGER.error("Heraldia: herald's house: step {} failed", name(p), e);
+			}
+			measure(p, System.nanoTime() - t0, c0 < 0 ? -1 : cpuNanos() - c0);
 			return;
 		}
+		long c0 = cpuNanos(), t0 = System.nanoTime();
 		actual = null;
+		if (bedHalves > 0) {
+			LOGGER.info("Heraldia: herald's house: {} bed halves set again (they straddled a chunk border)", bedHalves);
+		}
 		LOGGER.info("Heraldia: herald's house: shores: {} ponds left open drained ({} blocks of water), {} blocks of water banked; {} "
 				+ "blocks of water that ran into the footprint taken away; {} blocks of running water left without a source taken away",
 				settled.ponds(), settled.drained(), settled.banked(), cleared, dried);
 		finish(o);
-		nanos += System.nanoTime() - t0;
-		LOGGER.info("Heraldia: herald's house: built in {} ticks ({} ms on the server thread, at most a chunk per tick)",
-				ticks, nanos / 1_000_000);
+		measure(new Step(Phase.FINISH, 0, 0, null), System.nanoTime() - t0, c0 < 0 ? -1 : cpuNanos() - c0);
+		LOGGER.info("Heraldia: herald's house: by kind of step: {}", byKind());
+		LOGGER.info("Heraldia: herald's house: built in {} ticks ({} ms on the server thread, the slowest step {} ms, {} of it the "
+				+ "server thread's own work: {}; one step a tick)", ticks, nanos / 1_000_000, worst / 1_000_000,
+				worstCpu < 0 ? "? (not measured here)" : worstCpu / 1_000_000 + " ms", worstStep);
+	}
+
+	private static void step(Work o, Step p) {
+		switch (p.phase()) {
+			case LOAD -> { }                           // nothing: its chunk is there, generated off the server thread
+			case LEVEL -> level(o.level(), chunk(o, p), o.g());
+			case TEMPLATE -> template(o.level(), p, o.g(), o.template());
+			case BEDS -> beds(o, p.a());
+			case SHORE -> {
+				LevelChunk c = chunk(o, p);
+				cleared += Shores.clear(o.level(), c, (x, z) -> o.g().inColumns(x, z), ownWater, o.g().oy(), o.g().maxY());
+				settled = settled.plus(Shores.settle(o.level(), c, (x, z) -> outside(o.g(), x, z) <= Siting.MARGIN));
+			}
+			case DRY -> dried += Shores.dry(o.level(), chunk(o, p));
+			case ROAD -> road(o, p);
+			case DOCK -> {
+				Direction d = Direction.byName(p.side());
+				if (d != null) {
+					docked = dock(o.level(), o.g(), d, p.a(), dockY, p.b());
+				}
+			}
+			case SIGN -> sign(o, p.side());
+			case FINISH -> { }
+		}
+	}
+
+	private static LevelChunk chunk(Work o, Step p) {
+		return o.level().getChunk(p.a(), p.b());
+	}
+
+	// --- the chunks every step reads, asked for ahead (never waited for on the server thread) ---
+
+	/**
+	 * The chunks a step must have loaded before it runs, as packed {@link ChunkPos}. Only the steps that used to wait for
+	 * one on the server thread: the rest read what the {@link Phase#LOAD} phase loaded, as they always did.
+	 */
+	private static void need(Work o, Step p, List<Long> out) {
+		switch (p.phase()) {
+			case LOAD -> out.add(ChunkPos.pack(p.a(), p.b()));
+			case ROAD -> roadChunks(o.g(), p.side(), p.a(), p.b(), out);
+			case SIGN -> {
+				Road r = o.roads().get(p.side());
+				if (r != null) {
+					roadChunks(o.g(), p.side(), r.reached, r.reached, out);
+				}
+			}
+			case DOCK -> {
+				int[] size = o.g().plan().dockSize();
+				int r = Math.max(size[0], size[2]) + 1;         // whichever way the dock is turned, and its waterline
+				box(out, p.a() - r, p.b() - r, p.a() + r, p.b() + r);
+			}
+			// LEVEL, TEMPLATE, BEDS, SHORE and DRY read chunks the LOAD phase has already loaded, and took 2-48 ms: they
+			// are left as they were. Asking for a chunk keeps it loaded, and which chunks are loaded decides what
+			// Shores makes of a body of water (Shores.pond gives up at an unloaded chunk and the water is banked
+			// instead of drained), so holding more of them than the build used to would change the town itself.
+			default -> { }
+		}
+	}
+
+	/**
+	 * The chunks of one road's columns between {@code from} and {@code to} blocks out of the gate, its verges and the
+	 * signpost's own column included. Pinned for the four gates by {@code HeraldHouseLogicTest}.
+	 */
+	static void roadChunks(Grounds g, @Nullable String side, int from, int to, List<Long> out) {
+		Direction d = side == null ? null : Direction.byName(side);
+		int[] gate = d == null ? null : g.plan().gates().get(side);
+		if (d == null || gate == null) {
+			return;
+		}
+		int[] across = g.plan().road();
+		int a0 = Math.min(across[0], 0), a1 = Math.max(across[1] + 1, 0);      // + the signpost's own column
+		int gx = g.ox() + gate[0], gz = g.oz() + gate[1];
+		int x0 = gx + d.getStepX() * from, z0 = gz + d.getStepZ() * from;
+		int x1 = gx + d.getStepX() * to, z1 = gz + d.getStepZ() * to;
+		boolean sideways = d.getAxis() == Direction.Axis.Z;         // a road along z is widened along x, and the other way
+		box(out, Math.min(x0, x1) + (sideways ? a0 : 0), Math.min(z0, z1) + (sideways ? 0 : a0),
+				Math.max(x0, x1) + (sideways ? a1 : 0), Math.max(z0, z1) + (sideways ? 0 : a1));
+	}
+
+	static void box(List<Long> out, int x0, int z0, int x1, int z1) {
+		for (int cx = x0 >> 4; cx <= x1 >> 4; cx++) {
+			for (int cz = z0 >> 4; cz <= z1 >> 4; cz++) {
+				out.add(ChunkPos.pack(cx, cz));
+			}
+		}
+	}
+
+	/** Asks for a chunk without waiting for it (read or generated on the worker threads), as the grounds' build does. */
+	private static void ask(Work o, int cx, int cz) {
+		if (o.level().getChunkSource().getChunkNow(cx, cz) != null) {
+			return;
+		}
+		long key = ChunkPos.pack(cx, cz);
+		CompletableFuture<?> f = o.loading().get(key);
+		if (f == null || f.isDone()) {             // never asked for, or loaded once and unloaded since: asked for again
+			o.loading().put(key, o.level().getChunkSource().getChunkFuture(cx, cz, ChunkStatus.FULL, true));
+		}
+	}
+
+	/** Whether the chunks a step reads are loaded (after {@link #MAX_WAIT} ticks of waiting, it runs anyway). */
+	private static boolean ready(Work o, Step p) {
+		List<Long> keys = new ArrayList<>();
+		need(o, p, keys);
+		boolean ok = true;
+		for (long key : keys) {
+			int cx = ChunkPos.getX(key), cz = ChunkPos.getZ(key);
+			if (o.level().getChunkSource().getChunkNow(cx, cz) == null) {
+				ask(o, cx, cz);
+				ok = false;
+			}
+		}
+		return ok || waited++ >= MAX_WAIT;
+	}
+
+	/**
+	 * The chunks of the next {@link #AHEAD} steps, asked for ahead: by the time a step runs, its own are already there.
+	 * Only those steps: looking further (until some number of chunks had been found) reached the roads' steps while the
+	 * shores were being settled and held the whole ring loaded, and {@link Shores} banks a body of water instead of
+	 * draining it when it reaches as far as a loaded chunk, so the town itself came out different.
+	 */
+	private static void prefetch(Work o) {
+		List<Long> keys = new ArrayList<>();
+		for (int i = index; i < o.steps().size() && i < index + AHEAD; i++) {
+			need(o, o.steps().get(i), keys);
+		}
+		for (long key : keys) {
+			ask(o, ChunkPos.getX(key), ChunkPos.getZ(key));
+		}
+	}
+
+	private static final ThreadMXBean THREADS = ManagementFactory.getThreadMXBean();
+
+	/** The CPU time this thread has used, in nanoseconds (-1 where the JVM does not measure it): work, not waiting. */
+	private static long cpuNanos() {
+		try {
+			return THREADS.isCurrentThreadCpuTimeSupported() ? THREADS.getCurrentThreadCpuTime() : -1;
+		} catch (UnsupportedOperationException e) {
+			return -1;
+		}
+	}
+
+	/** Keeps what a step cost, in all and for its kind, and logs it on its own when it took more than {@link #SLOW_MS}. */
+	private static void measure(Step p, long ns, long cpu) {
+		nanos += ns;
+		int k = p.phase().ordinal();
+		kindSteps[k]++;
+		kindNanos[k] += ns;
+		kindCpu[k] += Math.max(cpu, 0);
+		if (ns > kindWorst[k]) {
+			kindWorst[k] = ns;
+			kindWorstCpu[k] = cpu;
+		}
+		if (ns > worst) {
+			worst = ns;
+			worstCpu = cpu;
+			worstStep = name(p);
+		}
+		if (ns > SLOW_MS * 1_000_000L) {
+			// The clock's time counts whatever stopped the process during the step (a collector's pause, the machine giving the
+			// CPU to something else, a chunk waited for); the thread's own CPU time counts only its work. Far apart: the step
+			// waited, it did not work. Logged at once, so the line's own time says when.
+			LOGGER.info("Heraldia: herald's house: a slow step: {}: {} ms by the clock, {} of them the server thread's own work",
+					name(p), ns / 1_000_000, cpu < 0 ? "? (not measured here)" : cpu / 1_000_000 + " ms");
+		}
+	}
+
+	private static String name(Step p) {
+		return (p.side() == null ? p.phase().toString() : p.phase() + " " + p.side()) + " " + p.a() + " " + p.b();
+	}
+
+	/** "LOAD 144 steps 940 ms (48 ms of work), the longest 935 ms (45 ms of work); ..." of the kinds that ran. */
+	private static String byKind() {
+		StringBuilder sb = new StringBuilder();
+		for (Phase k : Phase.values()) {
+			int i = k.ordinal();
+			if (kindSteps[i] == 0) {
+				continue;
+			}
+			sb.append(sb.isEmpty() ? "" : "; ").append(k).append(' ').append(kindSteps[i]).append(" steps ")
+					.append(kindNanos[i] / 1_000_000).append(" ms (").append(kindCpu[i] / 1_000_000).append(" ms of work), the longest ")
+					.append(kindWorst[i] / 1_000_000).append(" ms (")
+					.append(kindWorstCpu[i] < 0 ? "?" : String.valueOf(kindWorstCpu[i] / 1_000_000)).append(" ms of work)");
+		}
+		return sb.toString();
 	}
 
 	// --- terrain ---
@@ -303,9 +606,17 @@ final class Building {
 		}
 	}
 
+	/**
+	 * One chunk's part of the template. A chunk a step on purpose, neither smaller nor larger: {@code placeInWorld} walks
+	 * the whole template on every call whatever its bounding box holds (10.1 ms of the server thread at the median and 40.3
+	 * at worst, measured with a second call in the same step whose box holds nothing, so warm and therefore a lower bound;
+	 * the whole call is 19.7 ms at the median and 63.7 at worst), so smaller boxes pay that walk more
+	 * often -- four 8 x 8 cells per chunk took the phase from 1.9 to 6.2 s and still left an 86 ms step -- and larger ones
+	 * stop the shape-update pass running along the chunk borders inside the town, which can move a block (docs/LESSONS.md).
+	 */
 	private static void template(ServerLevel level, Step p, Grounds g, StructureTemplate t) {
-		BoundingBox bb = new BoundingBox(Math.max(g.ox(), p.cx() << 4), g.oy(), Math.max(g.oz(), p.cz() << 4),
-				Math.min(g.maxX(), (p.cx() << 4) + 15), g.maxY(), Math.min(g.maxZ(), (p.cz() << 4) + 15));
+		BoundingBox bb = new BoundingBox(Math.max(g.ox(), p.a() << 4), g.oy(), Math.max(g.oz(), p.b() << 4),
+				Math.min(g.maxX(), (p.a() << 4) + 15), g.maxY(), Math.min(g.maxZ(), (p.b() << 4) + 15));
 		BlockPos origin = new BlockPos(g.ox(), g.oy(), g.oz());
 		t.placeInWorld(level, origin, origin, Placing.dry(new StructurePlaceSettings().setBoundingBox(bb).setIgnoreEntities(false)
 				.setFinalizeEntities(false)), level.getRandom(), FLAGS);
@@ -368,29 +679,26 @@ final class Building {
 	}
 
 	/**
-	 * Every bed of the template again, both halves, once all the chunks are placed. Placing a chunk's part of the
-	 * template updates the shape of the blocks at its edge against what is beyond it, and a bed whose other half lies in
-	 * the next chunk (air yet) is removed, and then its other half too: which beds those are depends on where the
-	 * town falls on the chunk grid (seen on seed terrain: the workshop's two beds were missing and its residents never
-	 * had one). Set with {@link #FLAGS} (no shape updates), the two halves stay, and their POIs are registered.
+	 * One kind of the game's beds set again from the template, both halves, once all the chunks are placed. Placing a
+	 * chunk's part of the template updates the shape of the blocks at its edge against what is beyond it, and a bed whose
+	 * other half lies in the next chunk (air yet) is removed, and then its other half too: which beds those are depends
+	 * on where the town falls on the chunk grid (seen on seed terrain: the workshop's two beds were missing and its
+	 * residents never had one). Set with {@link #FLAGS} (no shape updates), the two halves stay, and their POIs are
+	 * registered.
+	 * <p>
+	 * One kind per step, not all of them in one: reading a kind out of the template is a pass over every block it holds,
+	 * and the whole lot in a single step took 164-200 ms of the server thread (the owner's cap is 100). Both halves of a
+	 * bed are the same block, so a step still sets whole beds.
 	 */
-	private static void beds(ServerLevel level, Grounds g, StructureTemplate t) {
+	private static void beds(Work o, int kind) {
+		Grounds g = o.g();
 		BlockPos origin = new BlockPos(g.ox(), g.oy(), g.oz());
-		StructurePlaceSettings settings = new StructurePlaceSettings();
-		int n = 0;
-		for (Block b : BuiltInRegistries.BLOCK) {
-			if (!(b instanceof BedBlock)) {
-				continue;
+		for (StructureTemplate.StructureBlockInfo info : o.template().filterBlocks(origin, new StructurePlaceSettings(),
+				o.bedKinds().get(kind))) {
+			if (!o.level().getBlockState(info.pos()).equals(info.state())) {
+				o.level().setBlock(info.pos(), info.state(), FLAGS);
+				bedHalves++;
 			}
-			for (StructureTemplate.StructureBlockInfo info : t.filterBlocks(origin, settings, b)) {
-				if (!level.getBlockState(info.pos()).equals(info.state())) {
-					level.setBlock(info.pos(), info.state(), FLAGS);
-					n++;
-				}
-			}
-		}
-		if (n > 0) {
-			LOGGER.info("Heraldia: herald's house: {} bed halves set again (they straddled a chunk border)", n);
 		}
 	}
 
@@ -402,9 +710,19 @@ final class Building {
 				|| s.is(Blocks.MYCELIUM) || s.is(Blocks.ROOTED_DIRT);
 	}
 
-	private static void road(ServerLevel level, Grounds g, String side) {
-		Direction d = Direction.byName(side);
-		if (d == null) {
+	/**
+	 * A stretch of one gate's road: from {@code p.a()} to {@code p.b()} blocks out of the gate, at most {@link #ROAD_RUN}
+	 * of them, so a step never walks the whole ring (its chunks are asked for ahead, and reaching them all in one step
+	 * cost 168-233 ms of the server thread, nearly all of it waiting for land that was not generated yet). Water stops
+	 * the road for good: its {@link Road#reached} is kept and the stretches left do nothing.
+	 */
+	private static void road(Work o, Step p) {
+		ServerLevel level = o.level();
+		Grounds g = o.g();
+		String side = p.side();
+		Direction d = side == null ? null : Direction.byName(side);
+		Road r = side == null ? null : o.roads().get(side);
+		if (d == null || r == null || r.stopped) {
 			return;
 		}
 		int[] gate = g.plan().gates().get(side);
@@ -414,18 +732,19 @@ final class Building {
 		// with the gates' roads on (SpawnRoads, built next) they are the road: a path here would show as a straight stub
 		// beside theirs where they bend, and they put the sign by their own end
 		boolean paths = !SpawnRoads.enabled();
-		int reached = Grounds.RING;
-		for (int step = 1; step <= Grounds.RING; step++) {
+		for (int step = p.a(); step <= p.b(); step++) {
 			int x0 = gx + d.getStepX() * step, z0 = gz + d.getStepZ() * step;
 			// the top block (ChunkAccess.getHeight is the highest block itself); the dock is placed from the block under it
 			// (its template has y = 1 at the water's surface) and only where that one is water too, as it always was
 			int y = level.getChunk(x0 >> 4, z0 >> 4).getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x0 & 15, z0 & 15) - 1;
 			if (!level.getBlockState(pos.set(x0, y, z0)).getFluidState().isEmpty()) {
 				if (!docked && step <= DOCK_REACH) {
-					docked = dock(level, g, d, x0, y, z0);
+					dockY = y;                 // its own step: the dock's chunks are asked for before it is laid
+					o.steps().add(index, new Step(Phase.DOCK, x0, z0, side));
 				}
-				reached = step - 1;
-				break;
+				r.reached = step - 1;
+				r.stopped = true;
+				return;
 			}
 			for (int a = across[0]; paths && a <= across[1]; a++) {
 				int x = x0 + (d.getAxis() == Direction.Axis.Z ? a : 0), z = z0 + (d.getAxis() == Direction.Axis.X ? a : 0);
@@ -441,9 +760,17 @@ final class Building {
 				}
 			}
 		}
-		if (paths && reached >= 4) {
-			signpost(level, g, d, gx, gz, reached, across);
+	}
+
+	/** The signpost by the end of one gate's road, once its stretches are done (nothing where the roads are built). */
+	private static void sign(Work o, @Nullable String side) {
+		Direction d = side == null ? null : Direction.byName(side);
+		Road r = side == null ? null : o.roads().get(side);
+		if (d == null || r == null || SpawnRoads.enabled() || r.reached < 4) {
+			return;
 		}
+		int[] gate = o.g().plan().gates().get(side);
+		signpost(o.level(), o.g(), d, o.g().ox() + gate[0], o.g().oz() + gate[1], r.reached, o.g().plan().road());
 	}
 
 	/** A signpost by the end of the road, facing whoever comes towards the house. */
