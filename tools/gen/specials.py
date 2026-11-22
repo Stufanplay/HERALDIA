@@ -152,18 +152,21 @@ def chapel_porch(t, th, nth, cx, z0, z1, stone):
                 t.set(x, y, z, "air")
 
 
-def bell_frame(t, th, x, z):
-    """A bell hung in the open from a timber frame: two posts three blocks apart along x, a beam, a little roof."""
+def bell_frame(t, th, x, z, tall=8):
+    """A bell hung in the open from a timber frame as tall as the chapel's ridge: two posts three blocks apart along x,
+    braced half way up, a beam, a little roof over the bell. Nothing to climb: posts and a brace, no rungs."""
     for px in (x, x + 2):
         t.set(px, 0, z, stone_of(th))
-        for y in range(1, 5):
+        for y in range(1, tall + 1):
             t.set(px, y, z, log(th["log"], "y"))
     t.set(x + 1, 0, z, stone_of(th))
-    for px in range(x, x + 3):
-        t.set(px, 5, z, log(th["log"], "x"))
+    t.set(x + 1, tall // 2, z, log(th["log"], "x"))                        # the brace, well over a villager's head
+    for px in range(x - 1, x + 4):
         for dz in (-1, 0, 1):
-            t.set(px, 6, z + dz, slab(th["roof_slab"]))
-    t.set(x + 1, 4, z, "bell[attachment=ceiling,facing=north]")
+            t.set(px, tall + 2, z + dz, slab(th["roof_slab"]))
+    for px in range(x, x + 3):
+        t.set(px, tall + 1, z, log(th["log"], "x"))
+    t.set(x + 1, tall, z, "bell[attachment=ceiling,facing=north]")
 
 
 def stub_tower(t, th, nth, stone, tx0, tz0, tw, top):
@@ -301,7 +304,7 @@ def church(th, rng, name, v=0):
             ridge = max(y for (x, y, z) in t.blocks if x == cx and z == nz1)
             bell_gable(t, th, nth, cx, nz1, ridge + 1, stone)
         elif carrier == "frame":                      # the bell on its frame behind the head
-            bell_frame(t, th, cx - 1, nz1 + 2)
+            bell_frame(t, th, cx - 5, 3)              # before the chapel too, on the other side of the porch
         elif carrier == "stub":
             stub_tower(t, th, nth, stone, tx0, nz1, tw, H + 6)
             t.fill(tx0 + 1, 1, nz1 + 1, tx0 + 3, 1, nz1 + 3, stone_of(th))
