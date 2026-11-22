@@ -1,5 +1,5 @@
-"""Lived-in wear on the special buildings (houses.weather_outside): moss low and cracks high on the stone that faces
-the open air, never a hole, nothing indoors, the ground course left to the foundation processor, and no draw from any
+"""Lived-in wear on the special buildings (houses.weather_outside): moss and cracks low on the stone that faces the
+open air (and a little higher beside water), nothing higher up, never a hole, nothing indoors, the ground course left to the foundation processor, and no draw from any
 random source."""
 import random
 
@@ -34,7 +34,7 @@ def test_only_the_stone_that_faces_the_open_air_weathers_and_only_into_its_kin()
     for (x, y, z), (was, now) in changed.items():
         assert was == "stone_bricks" and now in houses.KIN["stone_bricks"]
         assert y > 0 and (x in (0, 6) or z in (0, 6))                      # not the ground course, not indoors
-        assert now == ("mossy_stone_bricks" if y <= 2 else "cracked_stone_bricks")
+        assert y <= 2, (x, y, z)                                           # low on the wall, nothing higher up
     assert name(t.get(3, 2, 3)) == "stone_bricks" and name(t.get(0, 2, 3)) == "oak_planks"
     assert set(t.blocks) == set(before)                                    # never a hole, never a block more
 
@@ -66,3 +66,28 @@ def test_the_wear_draws_nothing_and_is_the_same_every_time():
     assert random.getstate() == state
     houses.weather_outside(b)
     assert a.blocks == b.blocks
+
+
+def test_beside_water_the_wear_climbs_two_courses_more_and_no_further():
+    """A wall with a pond at its foot: within two blocks of the water the moss and the cracks reach the fourth course,
+    not the fifth; away from it, and on a dry wall, the second and no higher."""
+    def box(water):
+        t = Template("x/specials/wet")
+        for x in range(2, 22):
+            for z in range(2, 9):
+                for y in range(8):
+                    t.set(x, y, z, "cobblestone" if x in (2, 21) or z in (2, 8) or y in (0, 7) else "air")
+        if water:
+            for x in range(8, 16):
+                t.set(x, 0, 0, "water")                 # a pond outside, two blocks from the long wall z = 2
+        return t
+    dry, wet = box(False), box(True)
+    houses.weather_outside(dry)
+    houses.weather_outside(wet)
+    worn = lambda t: {p for p, (st, _) in t.blocks.items() if st != "minecraft:cobblestone" and st != "minecraft:air"
+                      and st != "minecraft:water"}
+    assert worn(dry) and max(p[1] for p in worn(dry)) <= 2
+    high = {p for p in worn(wet) if p[1] > 2}
+    assert high, "the wall by the water shows no wear above the second course"
+    assert all(p[1] <= 4 and 6 <= p[0] <= 17 and p[2] == 2 for p in high), sorted(high)
+    assert {p for p in worn(wet) if p[1] <= 2} == worn(dry)                # the rest of the building is as the dry one

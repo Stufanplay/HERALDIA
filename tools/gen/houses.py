@@ -184,12 +184,13 @@ def weather(t, th, rng, x0, z0, x1, z1, y0, y1):
 
 
 def weather_outside(t, floor=0):
-    """Lived-in wear on a finished building, whatever its shape: of the stone blocks that face the open air, some become
-    their kin in patches, damp in the two courses above the ground and cracks higher up. Never a hole: a block is only
-    swapped for a full block of its family (KIN). Indoors nothing changes, and the ground course (y = floor) is left
-    alone: the style's foundation processor finds it by its block. The choice is a fixed function of the template's name
-    and the cell, with no draw from any random source, so nothing built after it changes. Returns how many blocks it
-    swapped."""
+    """Lived-in wear on a finished building, whatever its shape, as the owner chose it: moss and cracks LOW and beside
+    water, never holes, nothing higher up. Of the stone blocks that face the open air in the two courses above the ground
+    (and up to the fourth within two blocks of water), some become their kin in patches: mostly the damp one, a few the
+    cracked one. A block is only swapped for a full block of its family (KIN). Indoors nothing changes, and the ground
+    course (y = floor) is left alone: the style's foundation processor finds it by its block. The choice is a fixed
+    function of the template's name and the cell, with no draw from any random source, so nothing built after it
+    changes. Returns how many blocks it swapped."""
     import zlib
     if not t.blocks:
         return 0
@@ -203,6 +204,8 @@ def weather_outside(t, floor=0):
             if q not in out and q not in solid and all(lo[i] <= q[i] <= hi[i] for i in range(3)):
                 out.add(q)
                 todo.append(q)
+    wet = {(x + a, z + b) for (x, y, z), (st, _) in t.blocks.items() if st.replace("minecraft:", "").split("[")[0] == "water"
+           for a in range(-2, 3) for b in range(-2, 3)}
     key = zlib.crc32(t.name.encode())
     ox, oz = key % 64, (key >> 8) % 64
     n = 0
@@ -212,10 +215,11 @@ def weather_outside(t, floor=0):
             continue
         if not any(q in out for q in ((x + 1, y, z), (x - 1, y, z), (x, y, z + 1), (x, y, z - 1))):
             continue
+        if y > floor + (4 if (x, z) in wet else 2):
+            continue                               # wear is low on the wall: higher up the stone is sound
         v = (((x + z + ox) // 2 * 73856093) ^ ((y + oz) // 2 * 19349663)) % 100
-        low = y <= floor + 2
-        new = kin[0] if low else kin[1]
-        if v < (26 if low else 12) and new != st.replace("minecraft:", ""):
+        new = kin[0] if v < 20 else kin[1] if v < 28 else None
+        if new and new != st.replace("minecraft:", ""):
             t.set(x, y, z, new)
             n += 1
     return n
