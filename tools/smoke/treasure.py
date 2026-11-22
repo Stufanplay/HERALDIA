@@ -132,7 +132,7 @@ def main():
         ctx = srv.ctx
         ctx.run(f"forceload add {X} {Z}", r"Marked|force|already")
         for _ in range(s.PLACE_ATTEMPTS):
-            m = ctx.run(f"fill {X - 3} {Y - 1} {Z - 3} {X + 3} {Y - 1} {Z + 3} minecraft:stone", r"Successfully filled|No blocks")
+            m = ctx.run(f"fill {X - 3} {Y - 1} {Z - 3} {X + 3} {Y - 1} {Z + 3} minecraft:stone", r"Successfully filled|No blocks|not loaded(?! yet)")
             if "not loaded" not in m.string:
                 break
             time.sleep(s.PLACE_RETRY_S)

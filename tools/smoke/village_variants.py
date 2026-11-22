@@ -94,7 +94,7 @@ def place_timed(ctx, sid, x, z):
     ctx.run(f"forceload add {x - at.RADIUS} {z - at.RADIUS} {x + at.RADIUS} {z + at.RADIUS}", r"Marked|Added|force|already")
     for _ in range(s.PLACE_ATTEMPTS):
         t0 = time.monotonic()
-        m = ctx.run(f"place structure {sid} {x} ~ {z}", r"Generated structure")
+        m = ctx.run(f"place structure {sid} {x} ~ {z}", r"Generated structure|not loaded(?! yet)")
         dt = time.monotonic() - t0
         if "not loaded" not in m.group(0):
             return ("Generated" in m.group(0)), dt
