@@ -3,6 +3,7 @@ import json, os, random, shutil
 import uniques
 import mediums
 import mines
+import houses
 import shore as coast
 from uniques._common import chest_loot
 from core import Template, nsid, NS
@@ -23,6 +24,9 @@ SPARE = 22        # weight of "free bed" in the houses
 ALL_PROFS = ["armorer", "butcher", "cartographer", "cleric", "farmer", "fisherman", "fletcher", "leatherworker",
              "librarian", "mason", "shepherd", "toolsmith", "weaponsmith"]
 
+# the special buildings whose stone walls show lived-in wear (houses.weather_outside); the farm, the port and the graveyard
+# are fences and low walls, not buildings
+WEATHERED = ("church", "townhall", "market", "tavern", "blacksmith", "library", "inn", "mill")
 AVENUES = {"a": ("church", "townhall"), "b": ("market", "tavern"), "c": ("blacksmith", "library"),
            "d": ("farm", None)}  # right of D: inn (the coast port is separate, on the shore)
 
@@ -178,6 +182,8 @@ def build_theme(reg, th, seed):
         for v in range(VARIANTS.get(kind, 1)):
             vrng = rng if v == 0 else random.Random(f"{seed}/{tid}/{kind}/{v}")
             t = SPECIALS[kind](th, vrng, f"{tid}/specials/{kind}" + ("" if v == 0 else f"_{'abcdefgh'[v]}"), v=v)
+            if kind in WEATHERED:
+                houses.weather_outside(t)
             els.append((reg.add(t, "special:" + kind), VARIANT_WEIGHTS[v] if VARIANTS.get(kind, 1) > 1 else 1,
                         "rigid", bld_proc))
         reg.warnings += variant_errors(reg, [e[0] for e in els])
