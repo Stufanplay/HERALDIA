@@ -362,7 +362,7 @@ def check_structures(ctx):
             forceload(ctx, x - 8, z - 8, x + 47, z + 47)
             for _ in range(s.PLACE_ATTEMPTS):
                 t0 = time.monotonic()
-                m = ctx.run(f"place structure heraldia:medianas/{mid}/{style} {x} ~ {z}", r"Generated structure")
+                m = ctx.run(f"place structure heraldia:medianas/{mid}/{style} {x} ~ {z}", r"Generated structure|not loaded(?! yet)")
                 timings[f"{mid}/{style}"] = time.monotonic() - t0
                 if "not loaded" not in m.group(0):
                     break

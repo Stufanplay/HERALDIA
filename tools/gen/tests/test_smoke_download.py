@@ -232,3 +232,18 @@ def test_one_asks_for_exactly_one_entity():
     assert s._one("@a[name=rep]") == "@a[name=rep,limit=1]"
     assert s._one("@a[name=rep,limit=1]") == "@a[name=rep,limit=1]"
     assert s._one("@e") == "@e[limit=1]"
+
+
+def test_the_error_word_has_to_stand_on_its_own():
+    """`ERROR_PATTERN`'s `error` alternative. The bare word matched `error=null` in the Mojang profile lookup the server
+    logs for every Carpet fake player, so `run` returned that log line as the reply to a spawn that had worked; it also
+    matched a test's own success line. It must still match `Registry loading errors`, which is a real 26.3 failure, so
+    the word cannot just be removed and `error:` would have dropped it."""
+    must_not = ["...minecraft/hrd_testigo, error=null, errorMessage=Couldn't find any profile with name hrd_testigo",
+                "[OK] sin errores de los mapas web en el log",
+                "errorMessage=Couldn't find any profile"]
+    must = ["Registry loading errors:", "An unexpected error occurred while handling the command"]
+    for line in must_not:
+        assert not re.search(s.ERROR_PATTERN, line), line
+    for line in must:
+        assert re.search(s.ERROR_PATTERN, line), line
