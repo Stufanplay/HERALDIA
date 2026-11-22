@@ -1,5 +1,6 @@
 """Casas residenciales amuebladas."""
 import math
+import lint
 from core import Template, nsid
 from build import *
 from core import DIRS
@@ -180,6 +181,44 @@ def weather(t, th, rng, x0, z0, x1, z1, y0, y1):
                 low = (y - y0) * 3 < (y1 - y0 + 1)
                 if v < (26 if low else 12):
                     t.set(x, y, z, kin[0] if low else kin[1])
+
+
+def weather_outside(t, floor=0):
+    """Lived-in wear on a finished building, whatever its shape: of the stone blocks that face the open air, some become
+    their kin in patches, damp in the two courses above the ground and cracks higher up. Never a hole: a block is only
+    swapped for a full block of its family (KIN). Indoors nothing changes, and the ground course (y = floor) is left
+    alone: the style's foundation processor finds it by its block. The choice is a fixed function of the template's name
+    and the cell, with no draw from any random source, so nothing built after it changes. Returns how many blocks it
+    swapped."""
+    import zlib
+    if not t.blocks:
+        return 0
+    xs, ys, zs = zip(*t.blocks)
+    lo, hi = (min(xs) - 1, min(ys) - 1, min(zs) - 1), (max(xs) + 1, max(ys) + 1, max(zs) + 1)
+    solid = {p for p, (st, _) in t.blocks.items() if st != "minecraft:air" and not lint.passable(st)}
+    out, todo = {lo}, [lo]
+    while todo:                                   # the open air: what is reached from outside the template's box
+        x, y, z = todo.pop()
+        for q in ((x + 1, y, z), (x - 1, y, z), (x, y + 1, z), (x, y - 1, z), (x, y, z + 1), (x, y, z - 1)):
+            if q not in out and q not in solid and all(lo[i] <= q[i] <= hi[i] for i in range(3)):
+                out.add(q)
+                todo.append(q)
+    key = zlib.crc32(t.name.encode())
+    ox, oz = key % 64, (key >> 8) % 64
+    n = 0
+    for (x, y, z), (st, nbt) in sorted(t.blocks.items()):
+        kin = KIN.get(st.replace("minecraft:", ""))
+        if not kin or nbt or y <= floor:
+            continue
+        if not any(q in out for q in ((x + 1, y, z), (x - 1, y, z), (x, y, z + 1), (x, y, z - 1))):
+            continue
+        v = (((x + z + ox) // 2 * 73856093) ^ ((y + oz) // 2 * 19349663)) % 100
+        low = y <= floor + 2
+        new = kin[0] if low else kin[1]
+        if v < (26 if low else 12) and new != st.replace("minecraft:", ""):
+            t.set(x, y, z, new)
+            n += 1
+    return n
 
 
 def dormer(t, th, x, zf, ybase):
