@@ -204,6 +204,42 @@ def limits(n):
         + [("same_house", math.floor(MAX_SAME_HOUSE * n), False)]
 
 
+SHUT_R, SHUT_FAR = 24, 12      # blocks read around a villager; how far its search must get for it not to be shut in
+
+
+def shut_in(world_dir, pos):
+    """Is the villager at `pos` somewhere its path search cannot walk out of (a loft reached only by a ladder, a fenced
+    garden with its gate shut)? Read from the saved world: from its cell, the cells its search reaches (the generator's
+    model of the 26.3 search, mediums/_paths: no ladders, drops of 3 at most); shut in if none is SHUT_FAR blocks away.
+    On a slope or upstairs by a staircase it reaches the whole village: not shut in, however high it stands."""
+    import saved_world
+    sys.path.insert(0, os.path.join(s.ROOT, "tools", "gen"))
+    import lint
+    from mediums import _paths
+    x, y, z = pos
+    bx, bz, by = int(math.floor(x)), int(math.floor(z)), int(math.floor(y))
+    b = saved_world.blocks(world_dir, bx - SHUT_R, bx + SHUT_R, by - 30, by + 10, bz - SHUT_R, bz + SHUT_R)
+    g = _paths.Ground.__new__(_paths.Ground)
+    g.lint, g._floor, g._nb = lint, {}, {}
+    g.b = {p: st for p, st in b.items() if not st.endswith(("short_grass", "tall_grass")) and "fern" not in st}
+    g.box = (bx - SHUT_R, bz - SHUT_R, bx + SHUT_R + 1, bz + SHUT_R + 1)
+    starts = [(cx, cy, cz) for cx in (bx - 1, bx, bx + 1) for cz in (bz - 1, bz, bz + 1)
+              for cy in range(by - 3, by + 2) if g.floor(cx, cy, cz) is not None]
+    if not starts:
+        return True                                   # no floor under it: in a ladder shaft
+    start = min(starts, key=lambda c: (abs(c[0] + 0.5 - x) + abs(c[2] + 0.5 - z), abs(g.floor(*c) - y)))
+    seen, todo = {start}, [start]
+    while todo:
+        n = todo.pop()
+        if math.hypot(n[0] - start[0], n[2] - start[2]) >= SHUT_FAR:
+            return False
+        for m in g.neighbors(n):
+            if m not in seen:
+                seen.add(m)
+                todo.append(m)
+    return True
+
+
 def remove_bells(ctx, sites):
     """--fault bells: every bell of the placed villages becomes air."""
     ctx.run("gamerule max_block_modifications 4000000", r"Gamerule|set|now")
@@ -264,7 +300,7 @@ def main():
     lines, seen = queue.Queue(), []
     threading.Thread(target=s.reader, args=(proc, lines), daemon=True).start()
     ctx = s.Context(proc, lines, seen)
-    fails = []
+    fails, samples = [], {}
     try:
         s.wait_for(lines, r"Heraldia: (\d+) estructuras registradas", s.START_TIMEOUT_S, seen)
         for cmd in ("difficulty peaceful", "gamerule advance_weather false", "weather clear", "gamerule spawn_mobs false",
@@ -342,6 +378,18 @@ def main():
             proc.wait(timeout=120)
         except subprocess.TimeoutExpired:
             proc.kill()
+    # a figure, not a check (no limit yet): villagers that end the day shut in where their search cannot walk out of,
+    # read from the world the server saved (docs/LESSONS.md, "A villager gets by physics to places its path search cannot
+    # leave"); the "still" villagers above may include them
+    last = {u: sm[max(sm)][0] for u, sm in samples.items() if sm}
+    world_dir = os.path.join(a.work, "world")
+    if last and os.path.isdir(world_dir):
+        shut = [(u, p) for u, p in last.items() if shut_in(world_dir, p)]
+        print(f"RUTAS: shut in at the last sample (its search cannot walk 12 blocks from where it is): {len(shut)} of "
+              f"{len(last)} villagers (informative, no limit: whether it adds up day after day, and so what limit it "
+              f"needs, is not settled yet)")
+        for u, p in shut:
+            print(f"RUTAS:   shut in: {u[:8]} at {tuple(round(v, 1) for v in p)}")
     if fails:
         print("FAIL:\n  " + "\n  ".join(fails))
         sys.exit(1)
