@@ -37,10 +37,27 @@ def golem_slot(t, x, y, z, final):
              joint="rollable", place=1)
 
 
+def _worn(x, z, k=0):
+    """A fixed pseudo-random number in [0, 1) for a cell (no draw from the theme's random source: the pieces built after
+    a street keep the choices they had)."""
+    h = (x * 73856093 ^ z * 19349663 ^ k * 83492791) & 0xFFFFFFFF
+    h = (h ^ (h >> 13)) * 1274126177 & 0xFFFFFFFF
+    return ((h ^ (h >> 16)) & 0xFFFF) / 65536.0
+
+
 def path_strip(t, th, rng, x0, x1, z0, z1):
+    """A street's ground: the theme's paving, with a kerb along both edges (the second paving material and, in runs, the
+    theme's stone) so that a street reads as laid and edged, not as a stripe. Flush with the paving: nothing to step over."""
+    along_x = x1 - x0 > z1 - z0
+    kerb = stone_like(th)
     for x in range(x0, x1 + 1):
         for z in range(z0, z1 + 1):
-            t.set(x, 0, z, paving(rng, th))
+            b = paving(rng, th)
+            edge = (z in (z0, z1)) if along_x else (x in (x0, x1))
+            if edge and x1 - x0 != z1 - z0:              # a crossing has no kerb: streets run through it
+                run = _worn((x if along_x else z) // 3, z if along_x else x, 7)        # the same stone for 3 cells along
+                b = kerb if run < 0.30 else th["path2"] if _worn(x, z, 9) < 0.75 else b
+            t.set(x, 0, z, b)
             t.set(x, 1, z, "air")
 
 
@@ -168,6 +185,9 @@ def stone_like(th):
 
 
 # ------------------------------------------------------------------ plaza mayor
+# What a theme's potted plant is when it grows in a bed: the ones that only live in a pot, or that hurt whoever walks
+# through them, give way to something that stands on grass and harms nobody.
+BEDDING = {"cactus_pot": "dead_bush", "bamboo_pot": "fern", "sweet_berry_bush": "fern"}
 def plaza(th, rng, name, large=False):
     t = Template(name)
     N = 23
@@ -177,10 +197,12 @@ def plaza(th, rng, name, large=False):
             d = max(abs(x - c), abs(z - c))
             if d == c:
                 b = th["found"]
-            elif d in (4, 8):
-                b = th["path2"]
+            elif d == 4:
+                b = stone_like(th)                  # a step of the theme's stone round the fountain
+            elif d == 8 or (min(abs(x - c), abs(z - c)) == 2 and d > 4):
+                b = th["path2"]                     # the ring, and the lines the four avenues draw up to the fountain
             else:
-                b = th["path"]
+                b = th["path2"] if _worn(x, z, 3) < 0.12 else th["path"]
             t.set(x, 0, z, b)
             for y in range(1, 5):
                 t.set(x, y, z, "air")
@@ -191,26 +213,35 @@ def plaza(th, rng, name, large=False):
             edge = abs(x - c) == 3 or abs(z - c) == 3
             t.set(x, 0, z, rim)
             t.set(x, 1, z, rim if edge else "water")
+    # the pillar: two courses of the rim's stone, a post and the lantern, with water round its foot
     t.set(c, 1, c, rim); t.set(c, 2, c, rim)
-    t.set(c, 3, c, lantern(th, False))
+    t.set(c, 3, c, th["fence"])
+    t.set(c, 4, c, lantern(th, False))
     # benches and street lamps
     for (x, z) in ((2, 2), (2, N - 3), (N - 3, 2), (N - 3, N - 3)):
         t.set(x, 1, z, th["fence"]); t.set(x, 2, z, th["fence"]); t.set(x, 3, z, lantern(th, False))
     for (x, z, f) in ((c - 2, c - 5, "north"), (c + 2, c - 5, "north"), (c - 2, c + 5, "south"), (c + 2, c + 5, "south"),
                       (c - 5, c - 2, "west"), (c - 5, c + 2, "west"), (c + 5, c - 2, "east"), (c + 5, c + 2, "east")):
         t.set(x, 1, z, stairs(th["wstairs"], f))
-    # trees in planters
+    # a garden in each corner: a bed of grass with the theme's flowers round a tree that gives shade
     for (x, z) in ((5, 5), (5, N - 6), (N - 6, 5), (N - 6, N - 6)):
         for dx in (-1, 0, 1):
             for dz in (-1, 0, 1):
                 t.set(x + dx, 0, z + dz, "grass_block")
-        for y in range(1, 4):
+                if (dx or dz) and _worn(x + dx, z + dz, 5) < 0.6:
+                    t.set(x + dx, 1, z + dz, BEDDING.get(*2 * [th["plants"][int(_worn(x + dx, z + dz, 6) * len(th["plants"]))]]))
+        tall = 4 + int(_worn(x, z, 8) * 2)
+        for y in range(1, tall):
             t.set(x, y, z, log(th["log"], "y"))
-        for dx in range(-1, 2):
-            for dz in range(-1, 2):
-                for y in (4, 5):
-                    if not (y == 5 and abs(dx) + abs(dz) == 2):
-                        t.set(x + dx, y, z + dz, leaves(th))
+        for dx in range(-2, 3):
+            for dz in range(-2, 3):
+                for y in (tall, tall + 1, tall + 2):
+                    r = max(abs(dx), abs(dz))
+                    if r == 2 and (y != tall or abs(dx) == abs(dz)):
+                        continue                 # the wide ring only at the crown's foot, its corners cut
+                    if y == tall + 2 and abs(dx) + abs(dz) == 2:
+                        continue
+                    t.set(x + dx, y, z + dz, leaves(th))
     # bell hung from a wooden gantry
     for z in (c - 1, c + 1):
         for y in (1, 2, 3):
@@ -232,7 +263,7 @@ def plaza(th, rng, name, large=False):
     for (x, z, f, av) in ((c, 0, "north", "a"), (N - 1, c, "east", "b"), (c, N - 1, "south", "c"), (0, c, "west", "d")):
         t.jigsaw(x, 1, z, f"{f}_up", "heraldia:street", "heraldia:avenue", P(th, f"avenue_{av}"), final_state=AIR,
                  joint="aligned", sel=10, place=10)
-    t.min_size = (N, 8, N)
+    t.min_size = (N, 9, N)
     return t
 
 
@@ -254,6 +285,11 @@ def avenue(th, rng, name, left_pool, right_pool):
 
 
 # ------------------------------------------------------------------ small decoration (1x1)
+STREET_THINGS = ("bench", "woodpile", "hay", "milestone")
+# The street's decoration slots: lamps keep 7 parts in 13, as before the street's things came (they took their share
+# from the empty slots and one of the planter's two), so a street is as lit as it was.
+DECOR_WEIGHTS = (("lamp", 5), ("lamp_tall", 2), ("flower", 1), ("bench", 1), ("woodpile", 1), ("hay", 1), ("milestone", 1))
+DECOR_EMPTY = 1
 def decor_piece(th, rng, name, kind):
     t = Template(name)
     if kind == "lamp":
@@ -264,6 +300,24 @@ def decor_piece(th, rng, name, kind):
         for y in (1, 2):
             t.set(0, y, 0, th["fence"])
         t.set(0, 3, 0, lantern(th, False))
+    elif kind in STREET_THINGS:
+        # what a lived-in street has beside its lamps: somewhere to sit, the winter's wood, fodder, a stone that says
+        # how far. One block wide like a lamp, no light, no container, nothing a villager takes for a workstation
+        foot = stone_like(th) if kind == "milestone" else th["path2"]
+        t.jigsaw(0, 0, 0, "down_north", "heraldia:bottom", "heraldia:slot", "minecraft:empty", final_state=nsfix(foot), joint="rollable")
+        if kind == "bench":
+            t.set(0, 1, 0, stairs(th["wstairs"], "north"))
+        elif kind == "woodpile":
+            t.set(0, 1, 0, log(th["log"], "x"))
+            # a fixed choice per style, not a draw: the houses, built after the decoration from the same random
+            # source, stay the houses they were
+            if _worn(len(th["id"]), sum(map(ord, th["id"])), 4) < 0.5:
+                t.set(0, 2, 0, log(th["log"], "x"))
+        elif kind == "hay":
+            t.set(0, 1, 0, "hay_block[axis=y]")
+        else:
+            t.set(0, 1, 0, "cobblestone_wall[up=true,north=none,south=none,east=none,west=none,waterlogged=false]")
+            t.set(0, 2, 0, "stone_button[face=floor,facing=north,powered=false]")
     else:   # jardinera
         t.jigsaw(0, 0, 0, "down_north", "heraldia:bottom", "heraldia:slot", "minecraft:empty", final_state=nsfix(stone_like(th)), joint="rollable")
         t.set(0, 1, 0, potted(rng.choice(th["plants"])))
