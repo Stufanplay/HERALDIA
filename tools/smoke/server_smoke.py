@@ -64,7 +64,14 @@ DOWNLOAD_ATTEMPTS = 4         # a download cut off by the network (seen with Fab
 # of these words ends the wait too soon (see LESSONS), and an error text holding none of them does not end it at all --
 # `data get entity` with a selector that could match more than one answers `Only one entity is allowed, but the
 # provided selector allows more than one`, so the wait ran its full COMMAND_TIMEOUT_S. Measured on a dedicated server.
-ERROR_PATTERN = r"Unknown|Incorrect|Failed|Invalid|error|not loaded"
+# `errors?\b(?!=)` and not a bare `error`: the word has to stand on its own. A bare `error` matched `error=null` inside
+# the Mojang profile lookup the server logs for every Carpet fake player -- so `run` handed that log line back as the
+# reply to a `player <name> spawn` that had worked -- and it also matched a test's own success line ("sin errores de
+# los mapas web en el log"), which is the hazard the older lesson warns about, happening unnoticed. Measured over the
+# whole battery (64,101 log lines): with the bare word, 13 lines matched it and none of the others, all of them that
+# same Mojang noise; with this pattern, 0. It still has to match `Registry loading errors`, a real 26.3 failure, which
+# is why the word is not simply removed and why `error:` would have been wrong.
+ERROR_PATTERN = r"Unknown|Incorrect|Failed|Invalid|errors?\b(?!=)|not loaded"
 # /heraldia info nearby: (point, radius); the last one, with the maximum radius, measures the worst case. The search runs off the
 # server thread; on it only the confirmation (INFO_MAIN_MS at most). INFO_MAX_MS is the cap for the full response.
 INFO_POINTS = [((0, 0), None), ((6000, 0), 6000), ((0, -6000), 10000)]
