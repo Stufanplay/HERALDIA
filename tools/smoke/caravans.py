@@ -67,8 +67,39 @@ def as_player(ctx, cmd, ok):
     return ctx.run(f"execute as {PLAYER} at @s run {cmd}", ok)
 
 
+SURFACE_TP = "positioned over motion_blocking_no_leaves run tp"
+# The three replies this teleport can give. All three are listed so the wait ends promptly on each, and only the first
+# is accepted afterwards: `No entity was found` is NOT in `ERROR_PATTERN`, so leaving it out of `ok` would make the wait
+# run its full COMMAND_TIMEOUT_S (300 s) instead of failing. When `run()` fails by default, the `not loaded` half of
+# the check below becomes redundant and can go; the `No entity` half may NOT, for that same reason.
+_TP_REPLIES = r"Teleported|No entity|not loaded"
+
+
 def on_floor(ctx, sel, x, z):
-    ctx.run(f"execute positioned {x} 300 {z} positioned over motion_blocking_no_leaves run tp {sel} ~ ~ ~", r"Teleported|No entity")
+    """Puts `sel` on the surface of the column (x, z), and **fails if it did not get there**.
+
+    The reply used to be thrown away, so a column that was not loaded answered "That position is not loaded" and the
+    test carried on with the entity where it already was. Measured, three times in one run, on the `away` check whose
+    whole purpose is that the player moved 400 blocks off: it then printed "the player moves away", accepted the
+    dismissal and passed, without the player having moved.
+
+    `positioned over <heightmap>` needs the column loaded; an absolute `tp` does not, and for a **player** it makes the
+    column usable afterwards even while `execute if loaded` still answers false (both measured on a dedicated server).
+    A non-player entity cannot do that: teleported into an unloaded column it vanishes from the selectors and cannot
+    even be fetched back (measured), and loading the column with `forceload` is not an option here -- holding chunks
+    loaded changes what this test observes, since a caravan is dismissed for distance when the player leaves **or**
+    when its chunk unloads. So for an entity there is nothing to retry and the honest thing is to say so.
+
+    Deliberately minimal: the path that works today is untouched (same command, same coordinates), the retry only
+    happens where the test used to do nothing at all, and nothing here waits for the entity to settle -- that would
+    change what is observed, not just whether it is checked."""
+    cmd = f"execute positioned {x} 300 {z} {SURFACE_TP} {sel} ~ ~ ~"
+    m = ctx.run(cmd, _TP_REPLIES)
+    if "not loaded" in m.string and not sel.startswith("@"):      # a player loads its own column; an entity cannot
+        ctx.run(f"tp {sel} {x} 300 {z}", r"Teleported|No entity")
+        m = ctx.run(cmd, _TP_REPLIES)
+    if "Teleported" not in m.string:
+        raise SystemExit(f"on_floor: {sel} did not reach the surface of ({x}, {z}): {m.string.strip()[-120:]}")
 
 
 def point(a, b, t):

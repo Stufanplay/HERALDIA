@@ -10,7 +10,10 @@ one random source per village style, so a single new draw anywhere changes every
 handing a design change in, and put its output in the pull request. `--list KIND` prints the files of one kind.
 
 Not a test and not run by CI: a jar of `develop` has to be built to compare with (`./gradlew build -x test` in a
-checkout of it)."""
+checkout of it). Build that jar at the branch's merge base (`git merge-base HEAD origin/develop`), not at whatever
+`develop` was at hand: against a newer or older `develop` the comparison also shows what other changes did (seen: 35
+`fillers` "changed" that were another pull request's garden gates), and against an older one it hides nothing but
+blames this change for them."""
 import argparse, collections, sys, zipfile
 
 ROOT = "data/heraldia/"
