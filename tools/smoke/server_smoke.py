@@ -682,7 +682,7 @@ def main():
         send(proc, FORCELOAD)
         wait_for(lines, r"Marked|Added|chunks? .*force", COMMAND_TIMEOUT_S, seen)
         for _ in range(PLACE_ATTEMPTS):
-            m = run(proc, lines, seen, f"place structure {PLACE_TARGET} 0 ~ 0", r"Generated structure")
+            m = run(proc, lines, seen, f"place structure {PLACE_TARGET} 0 ~ 0", r"Generated structure|not loaded(?! yet)")
             if "not loaded" not in m.group(0):
                 break
             time.sleep(PLACE_RETRY_S)   # the forced chunks load in the following ticks

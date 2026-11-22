@@ -72,7 +72,7 @@ def place(ctx, sid, x, z):
     for x0, x1 in ((x - RADIUS, x - 1), (x, x + RADIUS - 1)):
         ctx.run(f"forceload add {x0} {z - RADIUS} {x1} {z + RADIUS - 1}", r"Marked|Added|force|already")
     for _ in range(s.PLACE_ATTEMPTS):
-        m = ctx.run(f"place structure {sid} {x} ~ {z}", r"Generated structure")
+        m = ctx.run(f"place structure {sid} {x} ~ {z}", r"Generated structure|not loaded(?! yet)")
         if "not loaded" not in m.group(0):
             return "Generated" in m.group(0)
         time.sleep(s.PLACE_RETRY_S)

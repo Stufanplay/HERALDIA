@@ -179,7 +179,7 @@ def place(ctx, dim, sid, x, z, remove=True):
     m = None
     for _ in range(s.PLACE_ATTEMPTS):
         t0 = time.monotonic()
-        m = ctx.run(en(dim, f"run place structure {sid} {x} 64 {z}"), r"Generated structure")
+        m = ctx.run(en(dim, f"run place structure {sid} {x} 64 {z}"), r"Generated structure|not loaded(?! yet)")
         print(f"/place {sid} en {dim}: {time.monotonic() - t0:.2f} s")
         if "not loaded" not in m.group(0):
             break

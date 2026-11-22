@@ -165,7 +165,7 @@ def locate(ctx, target, x=0, z=0):
 def place(ctx, sid, x, z, r):
     ctx.run(f"forceload add {x - r} {z - r} {x + r} {z + r}", r"Marked|Added|force|already")
     for _ in range(s.PLACE_ATTEMPTS):
-        m = ctx.run(f"place structure heraldia:unicas/{sid} {x} ~ {z}", r"Generated structure")
+        m = ctx.run(f"place structure heraldia:unicas/{sid} {x} ~ {z}", r"Generated structure|not loaded(?! yet)")
         if "not loaded" not in m.group(0):
             return "Generated" in m.group(0)
         time.sleep(s.PLACE_RETRY_S)

@@ -51,7 +51,7 @@ AIR_BLOCK = {"minecraft:air", "minecraft:cave_air", "minecraft:water", "minecraf
 def place(ctx, sid, x, z):
     ctx.run(f"forceload add {x - RADIUS} {z - RADIUS} {x + RADIUS} {z + RADIUS}", r"Marked|Added|force|already")
     for _ in range(s.PLACE_ATTEMPTS):
-        m = ctx.run(f"place structure {sid} {x} ~ {z}", r"Generated structure")
+        m = ctx.run(f"place structure {sid} {x} ~ {z}", r"Generated structure|not loaded(?! yet)")
         if "not loaded" not in m.group(0):
             return "Generated" in m.group(0)
         time.sleep(s.PLACE_RETRY_S)
