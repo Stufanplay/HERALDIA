@@ -75,3 +75,31 @@ fixed function of the style, a test checks that no street thing draws from the r
 compared with `develop`'s file by file: 144 new templates, 324 changed (144 avenues, 108 streets, 72 plazas), every
 house and every special building identical. The generation cost above and the first two route runs were measured on
 the first head (other houses); the last route row and the server tests are of the branch as it is.
+
+# Second step: the chapel that twelve styles shared
+
+![chapels](phase4/03_chapels_before_after.png)
+
+Three of the twelve styles (woodcutters, straw savanna, fortified dark forest), the two variants that had a tower:
+before on top, after below.
+
+The diagnosis: "eight of the twelve churches are one template in eight colours." The chapel was the most shared of all
+(12 of the 36 styles): a bell tower before a nave, or at its head. The bell is now carried three ways, by the family
+of the style:
+
+| carrier | styles | what it is |
+|---|---|---|
+| bellcote | forest, taiga, coast, swamp (5 styles) | no tower: a porch before the door and the bell in an opening over a gable (the facade's in one variant, the chancel's in the other) |
+| frame | savanna, jungle (4 styles) | no tower: the bell hangs in the open from a timber frame as tall as the ridge, beside the porch |
+| stub | dark forest, badlands (3 styles) | a squat tower that just clears the ridge, battlemented, the bell in its openings, no way up |
+
+**What it costs, said plainly.** Nine of those twelve styles lose the tall tower that was their village's landmark
+from afar; only the squat tower keeps something of it. And the chapel's body is still the same nave in all twelve.
+Whether a village should rather keep a tall tower (without its ladder) is a matter of taste, the owner's: it is one
+line to change per family.
+
+No ladder is left in any chapel. The tower's ran from the floor to the belfry; a villager climbs a ladder by walking
+into it and cannot plan the way down. (Measured elsewhere on a server: the low loft is the case that bites, the tall
+tower's ladder did not show up; so this is the cheap precaution, not the fix of a measured fault.)
+
+What changed in the built mod (`tools/jar_diff.py`, `develop` against this branch): see the pull request.
