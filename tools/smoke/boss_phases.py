@@ -84,7 +84,7 @@ def start_up(work, launcher, hour):
     s.wait_for(lines, r"Heraldia: (\d+) estructuras registradas", s.START_TIMEOUT_S, seen)
     ctx.run(f"forceload add {X - 16} {Z - 16} {X + 16} {Z + 16}", r"Marked|force|already")
     for _ in range(s.PLACE_ATTEMPTS):
-        m = ctx.run(f"fill {X - 10} {Y} {Z - 6} {X + 10} {Y + 6} {Z + GZ + 10} minecraft:air", r"Successfully filled|No blocks")
+        m = ctx.run(f"fill {X - 10} {Y} {Z - 6} {X + 10} {Y + 6} {Z + GZ + 10} minecraft:air", r"Successfully filled|No blocks|not loaded(?! yet)")
         if "not loaded" not in m.string:
             break
         time.sleep(s.PLACE_RETRY_S)
