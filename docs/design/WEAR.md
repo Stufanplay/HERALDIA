@@ -1,6 +1,8 @@
-# Design pass: the wear the owner chose
+# Design pass: the wear the owner approved
 
-The owner's answer to the diagnosis's question on wear: **"lived in": moss and cracks low and by water, never holes.**
+The diagnosis proposed, as its question on wear: **"lived in, not abandoned": moss and cracks low and by water, never
+holes.** The words are the design session's own; the owner approved the proposal as it stood (relayed by the
+orchestrator, not quoted from him).
 
 `houses.weather_outside` applies it to the stone of a village's special buildings (church, town hall, market, tavern,
 inn, smithy, library, mill): of the blocks that face the open air in the two courses above the ground, and up to the
@@ -29,11 +31,11 @@ at 22.
 What the pictures show honestly: the wear is low and discreet, as asked. From afar the building reads the same; close
 to its foot there is about twice the moss.
 
-## A first version that was not what he asked for
+## A first version that was not what had been approved
 
 It put the cracks high on the wall (as the houses of phase 3 do: "damp low, cracks high"). Counting the blocks of a
 generated church showed what that meant: cracked bricks from 22 to 94, a quarter of all its stone bricks, and hardly
-any more moss. The owner's words are "low and by water", so the wear is now only there.
+any more moss. The approved proposal says "low and by water", so the wear is now only there.
 
-The houses of phase 3 (`houses.weather`, merged before his answer) still crack high on the wall. That is his to
-decide: it is one line to bring them in line with this.
+The houses of phase 3 (`houses.weather`, merged before his answer) still crack high on the wall. Whether to bring them in line with this
+is not decided here: it would change every house.
