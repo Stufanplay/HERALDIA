@@ -102,7 +102,7 @@ def main():
             raise SystemExit(f"test pack {PACK} is not enabled: {m.string.strip()}")
         ctx.run(f"forceload add {X0 - 2} {Z0 - 2} {x1 + 2} {z1 + 2}", r"Marked|Added|force|already")
         for _ in range(s.PLACE_ATTEMPTS):   # forced chunks take a while to load
-            m = ctx.run(f"fill {X0 - 2} {Y - 1} {Z0 - 2} {x1 + 2} {Y - 1} {z1 + 2} minecraft:stone", r"Successfully filled|No blocks")
+            m = ctx.run(f"fill {X0 - 2} {Y - 1} {Z0 - 2} {x1 + 2} {Y - 1} {z1 + 2} minecraft:stone", r"Successfully filled|No blocks|not loaded(?! yet)")
             if "not loaded" not in m.string:
                 break
             time.sleep(s.PLACE_RETRY_S)

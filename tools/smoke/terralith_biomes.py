@@ -59,7 +59,7 @@ def main():
             x, y, z = where[biome]
             s.run(proc, lines, seen, f"forceload add {x} {z}", r"Marked|force|already")
             for _ in range(s.PLACE_ATTEMPTS):     # the chunk takes a while to load: "That position is not loaded"
-                m = s.run(proc, lines, seen, f"execute if biome {x} {y} {z} #heraldia:{tag}", r"Test passed|Test failed")
+                m = s.run(proc, lines, seen, f"execute if biome {x} {y} {z} #heraldia:{tag}", r"Test passed|Test failed|not loaded(?! yet)")
                 if "not loaded" not in m.string:
                     break
                 time.sleep(s.PLACE_RETRY_S)
