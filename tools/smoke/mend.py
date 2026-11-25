@@ -8,13 +8,14 @@ from nowhere), e.g. develop at c8b9a66. Two starts of the same world:
    Roadside Inns and Fallen Shulker Wharfs of the End midlands generated naturally (found with /locate from points round
    the origin, their chunks loaded; medium structures four times as frequent). Somebody's changes, which the repair must never touch: one inn's window is glowstone; a player's
    fountain (a source with its water running off it) stands by the town; the first inn whose room chest stands in the
-   way of the new door gets 7 diamonds in it.
+   way of the new door is filled to the brim (27 slots, full stacks, a 16-stack item and one with a component).
    The world is read back: the faults are there (or the test cannot say anything: it fails).
 2. With the new jar: `heraldia update mend scan`, `heraldia update mend apply all` and its confirmation (from the
    console), then `apply all` again (it must find nothing to do), and the world read back:
    - no running water with no source in the town's area (herald_steep's own rule), the fountain still running;
-   - every inn of an earlier version has its bedroom door, its room chest in the corner with what it held (the
-     diamonds are there, none dropped); the inn with the glowstone is exactly as it was;
+   - every inn of an earlier version has its bedroom door, its room chest in the corner with what it held (every slot
+     and every item of the full chest, its component kept, the old chest empty, none dropped); the inn with the
+     glowstone is exactly as it was;
    - every midlands wharf's post is a purpur pillar and its guard, if alive, is on it, attached to its top;
    - no step over 100 ms on the server thread (the command's own log line).
 Exit code 0 if everything passes.
@@ -43,6 +44,17 @@ INN_DOOR, INN_OLD_CHEST, INN_NEW_CHEST, INN_WINDOW = (16, 1, 8), (15, 1, 8), (12
 # the wharf's guard post (tools/gen/mediums/shulker_dock.py: CX, 1, AZ - 3) and the guard's name
 POST = (6, 1, 18)
 GUARD = "heraldia.medianas.embarcadero_shulker.guardia"
+# A chest filled to the brim, to catch a wrong slot or stack limit that 7 items in one slot cannot: the 27 slots of a
+# chest, 25 of them a full stack of 64, one a full stack of an item whose stack is 16 (ender pearls), and one a single
+# item carrying a component (a damaged sword). 25 * 64 + 16 + 1 = 1,617 items in 27 slots.
+CHEST_FULL = ([(i, 64) for i in ("minecraft:diamond", "minecraft:gold_ingot", "minecraft:iron_ingot",
+    "minecraft:emerald", "minecraft:redstone", "minecraft:lapis_lazuli", "minecraft:coal", "minecraft:copper_ingot",
+    "minecraft:quartz", "minecraft:amethyst_shard", "minecraft:bone", "minecraft:string", "minecraft:leather",
+    "minecraft:paper", "minecraft:book", "minecraft:stick", "minecraft:cobblestone", "minecraft:oak_log",
+    "minecraft:dirt", "minecraft:sand", "minecraft:gravel", "minecraft:glass", "minecraft:brick",
+    "minecraft:wheat", "minecraft:apple")]
+    + [("minecraft:ender_pearl", 16), ("minecraft:diamond_sword[minecraft:damage=5]", 1)])
+CHEST_ITEMS = sum(n for _, n in CHEST_FULL)
 MEND_DONE = r"Heraldia: update mend (scan|apply) (\S+): (\d+) steps, (\d+) ms on the server thread, the slowest (\S+ -?\d+ -?\d+(?: \(part\))?) (\d+) ms[^;]*; (.*)"
 CONFIRM = r"heraldia update mend apply all confirm (\S+)"
 
@@ -332,7 +344,9 @@ def tamper(a, p, inn_area):
             ctx.run(f"forceload add {x} {z}", r"[Cc]hunk|marked|already")
             ctx.until(f"execute if loaded {x} 64 {z}")
         ctx.run("setblock {} {} {} minecraft:glowstone".format(*cell(mine, INN_WINDOW)), r"Changed|Could not")
-        ctx.run("item replace block {} {} {} container.4 with minecraft:diamond 7".format(*cell(rich, INN_OLD_CHEST)), r"Replaced|No|not")
+        x, y, z = cell(rich, INN_OLD_CHEST)
+        for slot, (item, n) in enumerate(CHEST_FULL):
+            ctx.run(f"item replace block {x} {y} {z} container.{slot} with {item} {n}", r"Replaced")
         ctx.run("save-all flush", r"Saved the game|saved")
     finally:
         srv.stop()
@@ -469,6 +483,12 @@ def main():
     p.check(any(i["door"] != "air" and not i["door"].endswith("_door") for i in inns), "before: no inn without its back door")
     p.check(any(w["post"] == "end_stone_brick_wall" for w in wharfs), f"before: no wharf with a wall under its guard ({len(wharfs)} sentries)")
     before = {i["piece"]: i for i in inns}
+    # the fill has to be in the world BEFORE the repair, or "nothing was lost" would mean nothing
+    held = before.get(rich, {}).get("old_items", [])
+    print(f"BEFORE inn {rich}: the chest holds {len(held)} slots, "
+          f"{sum(int(it.get('count', 1)) for it in held)} items", flush=True)
+    p.check(len(held) == len(CHEST_FULL) and sum(int(it.get("count", 1)) for it in held) == CHEST_ITEMS,
+            f"the full chest was not filled, so the carry cannot be measured: {len(held)} slots")
     # ---- the new jar
     if a.old_jar and os.path.basename(a.old_jar) != os.path.basename(a.jar):
         shutil.copy(os.path.abspath(a.jar), os.path.join(a.work, "mods"))
@@ -510,8 +530,15 @@ def main():
         # either repaired whole, or left exactly as it was (the command found somebody's block there): nothing in between
         p.check(ok or same, f"an inn half repaired: {b} -> {i}")
         if i["piece"] == rich:
-            diamonds = [it for it in i["new_items"] if str(it.get("id")) == "minecraft:diamond"]
-            p.check(diamonds and int(diamonds[0].get("count", 0)) == 7, f"the diamonds did not move with the chest: {i['new_items']}")
+            got = sum(int(it.get("count", 1)) for it in i["new_items"])
+            print(f"AFTER inn {i['piece']}: the full chest carried {len(i['new_items'])}/{len(CHEST_FULL)} slots, "
+                  f"{got}/{CHEST_ITEMS} items; {len(i['old_items'])} slots left behind", flush=True)
+            p.check(len(i["new_items"]) == len(CHEST_FULL),
+                    f"the full chest lost slots: {len(i['new_items'])} of {len(CHEST_FULL)}")
+            p.check(got == CHEST_ITEMS, f"the full chest lost items: {got} of {CHEST_ITEMS}")
+            p.check(not i["old_items"], f"items stayed in the old chest: {i['old_items']}")
+            p.check(any("damage" in str(it.get("components", "")) for it in i["new_items"]),
+                    f"the item's component did not survive the carry: {i['new_items']}")
     p.check(fixed >= 1, "no inn repaired")
     print(f"AFTER: {fixed} inns repaired, {left} left exactly as they were", flush=True)
     # nothing dropped where the repair worked (the inns' crops drop their own seeds now and then: not counted)
