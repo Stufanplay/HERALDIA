@@ -132,6 +132,15 @@ def test_a_closet_that_walls_the_ladder_in_leaves_the_player_out():
     assert "el jugador no puede subir la escalera del armario" in msgs
 
 
+def test_a_closet_whose_ladder_comes_out_nowhere_is_reported():
+    """The other half of check 3: the player gets on the ladder but the top is sealed."""
+    t, (lx, lz) = room(w=6, d=6, far=True)
+    ladders.shut(t, TH)
+    t.set(lx, 5, lz, "oak_planks")               # the loft's floor closed over the ladder's top
+    msgs = [m for m, _ in ladders.issues(t)]
+    assert "el armario deja la escalera sin salida arriba" in msgs, msgs
+
+
 def test_a_short_ladder_is_left_alone():
     """A drop of 3 is one a villager's search takes: a ladder of 3 rungs needs no gate."""
     t, _ = room(rungs=3)

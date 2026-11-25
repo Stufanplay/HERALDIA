@@ -9,12 +9,15 @@ walk audit (`lint.walk`, the player's model) goes through one, so the player los
 structures' windmill and watchtower already do (`mediums/_common.ladder_closet`, measured on a server: a villager left
 inside stayed inside 12 times in 12).
 
-`shut(t, th)` places the gates and records them on the template; `issues(t)` is the audit, three checks:
+`shut(t, th)` places the gates and records them on the template; `issues(t)` is the audit, and the build fails on any
+of its four findings:
   1. nothing stranded: no cell a villager reaches by climbing from the ground that its search cannot walk back from;
   2. the player keeps every cell it could reach from the piece's entrance before the gates were placed;
-  3. the player still reaches the ladder and can climb it.
-It also checks that the gates took no walkable cell away from the VILLAGER either, apart from the ladder itself: that
-is how a closet turns into a walled-off room (an experimental closet once walled off part of 30 church templates).
+  3. the player still reaches the ladder and can get off it at the top;
+  4. no cell that is NOT the ladder itself is shut away from the villager -- that is how a closet turns into a
+     walled-off room (an experimental closet once walled off part of 30 church templates, 162 cells each, and the
+     first shape tried here did the same to 18 of them, 167 cells each).
+Each of the four has a case in tests/test_ladders.py that makes it fire.
 """
 import copy
 
@@ -219,26 +222,26 @@ def _player_walk(t):
 
 
 def issues(t):
-    """[(message, position)] for the design audit: the three checks of this module's docstring."""
+    """[(message, position)] for the design audit: the four findings of this module's docstring. One position per
+    finding and per template (the audit counts templates, not cells: `lint.summarize`)."""
     out = []
     if not columns(t):
         return out
     g = _ground(t)
     walk = ground_walk(t, g)
     # 1. nobody stranded
-    for c in sorted(stranded(t, walk, g)):
-        out.append(("escalera de mano que deja al aldeano varado", c))
-        break                         # one per template: the audit counts templates, not cells
+    stuck = stranded(t, walk, g)
+    if stuck:
+        out.append(("escalera de mano que deja al aldeano varado", min(stuck)))
     if not t.closets:
         return out
     before = _without_closets(t)
-    # 2. the player keeps every cell it could reach from the entrance
-    lost = _player_walk(before) - _player_walk(t)
-    for c in sorted(lost):
-        out.append(("el armario de la escalera quita al jugador una celda", c))
-        break
-    # 3. the player reaches the ladder and can climb it
     pw = _player_walk(t)
+    # 2. the player keeps every cell it could reach from the entrance
+    lost = _player_walk(before) - pw
+    if lost:
+        out.append(("el armario de la escalera quita al jugador una celda", min(lost)))
+    # 3. the player reaches the ladder and can get off it at the top
     for c in t.closets:
         x, z, y0, y1 = c["ladder"]
         if not any((x, y, z) in pw for y in range(y0, y1 + 2)):
@@ -251,7 +254,6 @@ def issues(t):
     gates = {p for c in t.closets for p in c["cells"]}
     ladders = {(x, y, z) for x, z, y0, y1 in columns(t) for y in range(y0, y1 + 2)}
     gone = ground_walk(before) - walk - gates - ladders
-    for c in sorted(gone):
-        out.append(("el armario de la escalera cierra al aldeano una celda que no es la escalera", c))
-        break
+    if gone:
+        out.append(("el armario de la escalera cierra al aldeano una celda que no es la escalera", min(gone)))
     return out
