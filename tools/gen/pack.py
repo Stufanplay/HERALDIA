@@ -15,6 +15,7 @@ from streets import (straight, crossroad, terminator_end, watchtower, gate, plaz
 from specials import SPECIALS, VARIANTS
 from fillers import filler, villager_piece, golem_piece, rug_piece
 import board
+import ladders
 import traces
 import trades
 import parallel
@@ -55,6 +56,7 @@ def fix_supports(t):
 
 class Registry:
     def __init__(self):
+        self.theme = None         # the style being built (build_theme): its fence gate shuts the village ladders
         self.templates = {}       # nombre -> Template
         self.pools = {}           # id -> dict(elements=[(loc|None, weight, projection, processors)], fallback)
         self.kinds = {}           # template name -> type (house, special:x, filler, street...)
@@ -65,6 +67,10 @@ class Registry:
     def add(self, t, kind):
         fix_supports(t)
         t.normalize()
+        # a villager climbs a ladder by walking into it and its search has no way down: shut the foot of every village
+        # ladder it could climb from the ground behind a fence gate (tools/gen/ladders.py, audited by lint)
+        if self.theme is not None and ladders.is_village(kind):
+            ladders.shut(t, self.theme)
         x0, y0, z0, x1, y1, z1 = t.bounds()
         sx, sy, sz = t.size()
         for j in t.jigsaws:
@@ -127,6 +133,7 @@ def variant_errors(reg, names):
 def build_theme(reg, th, seed):
     rng = random.Random(seed)
     tid = th["id"]
+    reg.theme = th
     street_proc = nsid(f"{tid}/street")
     bld_proc = nsid(f"{tid}/building")
     # ---- calles

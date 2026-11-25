@@ -52,6 +52,7 @@ class Template:
         self.blocks = {}          # (x,y,z) -> (state, nbt|None)
         self.entities = []        # (x,y,z, nbt dict)
         self.jigsaws = []         # info for the simulator
+        self.closets = []         # ladders.shut: [{"ladder": (x, z, y0, y1), "cells": {(x,y,z): previous state}}]
         self.min_size = (1, 1, 1)
 
     # --- blocks ---
@@ -134,6 +135,10 @@ class Template:
         for j in self.jigsaws:
             x, y, z = j["pos"]
             j["pos"] = (x - x0, y - y0, z - z0)
+        for c in self.closets:
+            lx, lz, ly0, ly1 = c["ladder"]
+            c["ladder"] = (lx - x0, lz - z0, ly0 - y0, ly1 - y0)
+            c["cells"] = {(x - x0, y - y0, z - z0): st for (x, y, z), st in c["cells"].items()}
 
     def size(self):
         x0, y0, z0, x1, y1, z1 = self.bounds()
