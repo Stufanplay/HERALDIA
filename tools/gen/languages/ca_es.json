@@ -2114,6 +2114,7 @@
   "heraldia.actualizar.reparar.dialogo": "Reparar errors de generació",
   "heraldia.actualizar.reparar.linea": "%s: %s per reparar, %s bé, %s que no es toquen, %s avisos",
   "heraldia.actualizar.reparar.linea.hecho": "%s: %s reparats, %s bé, %s que no es toquen, %s avisos",
+  "heraldia.actualizar.reparar.bloques": "%s: %s blocs del món en total",
   "heraldia.actualizar.reparar.streams": "rierols sense font a tocar de la Casa de l'Herald",
   "heraldia.actualizar.reparar.water": "aigua quieta penjada a l'aire a tocar de la Casa de l'Herald",
   "heraldia.actualizar.reparar.anillo": "anell de la Casa de l'Herald: %s graons d'un bloc en rampa (bancals). No es repara: refer el terreny on viu la gent no distingeix la terra del generador de la d'un jugador. Un poble nou ja surt amb terrasses.",

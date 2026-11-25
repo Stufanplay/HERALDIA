@@ -180,7 +180,15 @@ public final class GenerationMend {
 	record Target(Kind kind, ResourceKey<Level> dimension, int cx, int cz) {
 	}
 
-	record Finding(Kind kind, Outcome outcome, BlockPos at, String detail) {
+	/**
+	 * One place the command looked at. {@code blocks} is how many blocks of the world the finding is about, where that
+	 * is what the operator needs to judge the size of the change (the water and the streams); 0 where the unit is the
+	 * piece itself (an inn, a wharf), so a total of 0 means "not counted in blocks", never "nothing".
+	 */
+	record Finding(Kind kind, Outcome outcome, BlockPos at, String detail, int blocks) {
+		Finding(Kind kind, Outcome outcome, BlockPos at, String detail) {
+			this(kind, outcome, at, detail, 0);
+		}
 	}
 
 	/** A scan or an apply in progress (one at a time). */
@@ -205,6 +213,8 @@ public final class GenerationMend {
 		/** The step left the target half done on purpose (it goes on, within the tick's budget); the column it is at. */
 		boolean more;
 		int column;
+		/** What the columns of the chunk being settled have come to so far: reported as one finding when it is done. */
+		int ponds, drained, banked;
 
 		Job(String id, boolean apply, Set<Kind> kinds, List<Target> targets, CommandSourceStack source, Map<String, String> lang) {
 			this.id = id;
@@ -442,14 +452,21 @@ public final class GenerationMend {
 				continue;
 			}
 			long[] n = new long[Outcome.values().length];
+			long blocks = 0;
 			for (Finding f : findings) {
 				if (f.kind == k) {
 					n[f.outcome.ordinal()]++;
+					blocks += f.blocks();
 				}
 			}
 			out.add(Texts.t(l, "heraldia.actualizar.reparar.linea" + (applied ? ".hecho" : ""), Texts.t(l, "heraldia.actualizar.reparar." + k.word),
 					n[Outcome.REPAIR.ordinal()], n[Outcome.FINE.ordinal()], n[Outcome.LEFT.ordinal()], n[Outcome.NOTICE.ordinal()])
 					.withStyle(ChatFormatting.YELLOW));
+			// how many blocks of the world: the places are the command's unit, the blocks are what a person can judge
+			if (blocks > 0) {
+				out.add(Texts.t(l, "heraldia.actualizar.reparar.bloques", Texts.t(l, "heraldia.actualizar.reparar." + k.word), blocks)
+						.withStyle(ChatFormatting.YELLOW));
+			}
 			int shown = 0;
 			for (Finding f : findings) {
 				if (f.kind == k && f.outcome != Outcome.FINE && shown++ < SHOWN) {
@@ -707,7 +724,8 @@ public final class GenerationMend {
 		if (!j.apply) {                                // counting is cheap: the whole chunk at once
 			int n = Repairs.standing(level, chunk, g::inArea);
 			if (n > 0) {
-				j.findings.add(new Finding(Kind.WATER, Outcome.REPAIR, new BlockPos(t.cx << 4, g.groundY(), t.cz << 4), String.valueOf(n)));
+				j.findings.add(new Finding(Kind.WATER, Outcome.REPAIR, new BlockPos(t.cx << 4, g.groundY(), t.cz << 4),
+						String.valueOf(n), n));
 			}
 			return true;
 		}
@@ -720,14 +738,22 @@ public final class GenerationMend {
 		java.util.function.BiPredicate<Integer, Integer> in = (a, b) -> a == x && b == z && g.inArea(a, b);
 		if (g.inArea(x, z) && Repairs.standing(level, chunk, in) > 0) {
 			int[] s = Repairs.settle(level, chunk, in);
-			j.findings.add(new Finding(Kind.WATER, Outcome.REPAIR, new BlockPos(x, g.groundY(), z),
-					s[0] + " ponds drained (" + s[1] + " blocks), " + s[2] + " banked"));
+			j.ponds += s[0];
+			j.drained += s[1];
+			j.banked += s[2];
 		}
 		if (++j.column < 256) {
 			j.more = true;
 			return false;
 		}
 		j.column = 0;
+		// one finding for the chunk, at the cell the scan named and counting the blocks the scan counted: the offer the
+		// operator confirmed and what was done are then the same figure, in the same unit
+		if (j.drained + j.banked > 0) {
+			j.findings.add(new Finding(Kind.WATER, Outcome.REPAIR, new BlockPos(t.cx << 4, g.groundY(), t.cz << 4),
+					j.ponds + " ponds drained (" + j.drained + " blocks), " + j.banked + " banked", j.drained + j.banked));
+		}
+		j.ponds = j.drained = j.banked = 0;
 		return true;
 	}
 
@@ -829,7 +855,7 @@ public final class GenerationMend {
 				level.setBlock(BlockPos.of(p), Blocks.AIR.defaultBlockState(), BuiltRoads.FLAGS);
 			}
 		}
-		j.findings.add(new Finding(Kind.STREAMS, Outcome.REPAIR, first, String.valueOf(unfed.size())));
+		j.findings.add(new Finding(Kind.STREAMS, Outcome.REPAIR, first, String.valueOf(unfed.size()), unfed.size()));
 		return true;
 	}
 
@@ -1117,8 +1143,12 @@ public final class GenerationMend {
 		for (Kind k : j.kinds) {
 			long[] n = new long[Outcome.values().length];
 			j.findings.stream().filter(f -> f.kind == k).forEach(f -> n[f.outcome.ordinal()]++);
+			long blocks = j.findings.stream().filter(f -> f.kind == k).mapToLong(Finding::blocks).sum();
 			sb.append(sb.isEmpty() ? "" : "; ").append(k.word).append(": ").append(n[0]).append(j.apply ? " repaired, " : " to repair, ")
 					.append(n[1]).append(" fine, ").append(n[2]).append(" left alone, ").append(n[3]).append(" notices");
+			if (blocks > 0) {
+				sb.append(" (").append(blocks).append(" blocks)");
+			}
 		}
 		return sb.toString();
 	}

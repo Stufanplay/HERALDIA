@@ -2114,6 +2114,7 @@
   "heraldia.actualizar.reparar.dialogo": "Réparer les défauts de génération",
   "heraldia.actualizar.reparar.linea": "%s : %s à réparer, %s en bon état, %s laissés tels quels, %s avertissements",
   "heraldia.actualizar.reparar.linea.hecho": "%s : %s réparés, %s en bon état, %s laissés tels quels, %s avertissements",
+  "heraldia.actualizar.reparar.bloques": "%s : %s blocs du monde en tout",
   "heraldia.actualizar.reparar.streams": "ruisseaux sans source près de la Maison du Héraut",
   "heraldia.actualizar.reparar.water": "eau immobile suspendue dans le vide près de la Maison du Héraut",
   "heraldia.actualizar.reparar.anillo": "anneau de la Maison du Héraut : %s marches d'un bloc en rampe (rizières). Non réparé : refaire le terrain là où vivent les gens ne distingue pas la terre du générateur de celle d'un joueur. Un village construit aujourd'hui a des terrasses.",

@@ -2114,6 +2114,7 @@
   "heraldia.actualizar.reparar.dialogo": "Reparar falhas de geração",
   "heraldia.actualizar.reparar.linea": "%s: %s para reparar, %s em ordem, %s deixados como estão, %s avisos",
   "heraldia.actualizar.reparar.linea.hecho": "%s: %s reparados, %s em ordem, %s deixados como estão, %s avisos",
+  "heraldia.actualizar.reparar.bloques": "%s: %s blocos do mundo no total",
   "heraldia.actualizar.reparar.streams": "riachos sem nascente junto à Casa do Arauto",
   "heraldia.actualizar.reparar.water": "água parada suspensa no ar junto à Casa do Arauto",
   "heraldia.actualizar.reparar.anillo": "anel da Casa do Arauto: %s degraus de um bloco em rampa (arrozais). Não é reparado: refazer o terreno onde vivem pessoas não distingue a terra do gerador da de um jogador. Uma vila construída hoje já tem terraços.",

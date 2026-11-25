@@ -2114,6 +2114,7 @@
   "heraldia.actualizar.reparar.dialogo": "Generierungsfehler reparieren",
   "heraldia.actualizar.reparar.linea": "%s: %s zu reparieren, %s in Ordnung, %s unangetastet, %s Hinweise",
   "heraldia.actualizar.reparar.linea.hecho": "%s: %s repariert, %s in Ordnung, %s unangetastet, %s Hinweise",
+  "heraldia.actualizar.reparar.bloques": "%s: %s Blöcke der Welt insgesamt",
   "heraldia.actualizar.reparar.streams": "Bäche ohne Quelle beim Haus des Herolds",
   "heraldia.actualizar.reparar.water": "stehendes Wasser in der Luft beim Haus des Herolds",
   "heraldia.actualizar.reparar.anillo": "Ring des Hauses des Herolds: %s einstufige Stufen in Rampen (Reisterrassen). Nicht repariert: das Gelände neu zu formen, wo Leute leben, kann die Erde des Generators nicht von der eines Spielers unterscheiden. Ein heute gebautes Dorf hat Terrassen.",

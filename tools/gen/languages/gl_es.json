@@ -2114,6 +2114,7 @@
   "heraldia.actualizar.reparar.dialogo": "Reparar fallos de xeración",
   "heraldia.actualizar.reparar.linea": "%s: %s por reparar, %s ben, %s que non se tocan, %s avisos",
   "heraldia.actualizar.reparar.linea.hecho": "%s: %s reparados, %s ben, %s que non se tocan, %s avisos",
+  "heraldia.actualizar.reparar.bloques": "%s: %s bloques do mundo en total",
   "heraldia.actualizar.reparar.streams": "regatos sen fonte xunto á Casa do Heraldo",
   "heraldia.actualizar.reparar.water": "auga queda colgada no aire xunto á Casa do Heraldo",
   "heraldia.actualizar.reparar.anillo": "anel da Casa do Heraldo: %s chanzos dun bloque en rampla (socalcos). Non se repara: refacer o terreo onde vive xente non distingue a terra do xerador da dun xogador. Un pobo novo xa sae con terrazas.",

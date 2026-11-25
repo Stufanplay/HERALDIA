@@ -56,7 +56,19 @@ CHEST_FULL = ([(i, 64) for i in ("minecraft:diamond", "minecraft:gold_ingot", "m
     + [("minecraft:ender_pearl", 16), ("minecraft:diamond_sword[minecraft:damage=5]", 1)])
 CHEST_ITEMS = sum(n for _, n in CHEST_FULL)
 MEND_DONE = r"Heraldia: update mend (scan|apply) (\S+): (\d+) steps, (\d+) ms on the server thread, the slowest (\S+ -?\d+ -?\d+(?: \(part\))?) (\d+) ms[^;]*; (.*)"
+# one kind's figures in that line's summary: "water: 2 to repair, 0 fine, 0 left alone, 0 notices (105 blocks)".
+# The blocks are optional (the kinds whose unit is the piece do not count them).
+COUNTS = re.compile(r"(\w+): (\d+) (?:to repair|repaired), (\d+) fine, (\d+) left alone, (\d+) notices(?: \((\d+) blocks\))?")
 CONFIRM = r"heraldia update mend apply all confirm (\S+)"
+
+
+def summary(line):
+    """{kind: {"repair", "fine", "left", "notices", "blocks"}} of a mend log line (empty where it does not parse)."""
+    out = {}
+    for m in COUNTS.finditer(line or ""):
+        out[m.group(1)] = dict(zip(("repair", "fine", "left", "notices", "blocks"),
+                                   [int(g) if g else 0 for g in m.groups()[1:]]))
+    return out
 
 
 def rotate(rot, x, z):
@@ -475,6 +487,7 @@ def main():
               f"{len(logged)} running from waterlogged blocks; fountain {world.block(*fountain)}", flush=True)
         # which of the two an earlier jar leaves depends on the jar (the shores fix came first, the running-water one after)
         p.check(lost or wet, "before: neither a stream from nowhere nor water standing in the air by the town")
+        standing_before, unfed_before = len(wet), len(lost)
         p.check(world.block(*fountain) == "water", f"before: the fountain is {world.block(*fountain)}")
     for i in inns:
         print(f"BEFORE inn {i['piece']}: door {i['door']}/{i['upper']}, chest {i['old_chest']} -> {i['new_chest']}", flush=True)
@@ -499,6 +512,25 @@ def main():
         if m:
             p.check(int(m.group(6)) <= SLOW_MS, f"{k}: a step of {m.group(6)} ms on the server thread (at most {SLOW_MS})")
             print(f"COST mend {k}: {m.group(3)} steps, {m.group(4)} ms on the server thread, the slowest {m.group(6)} ms", flush=True)
+    # the offer and the result have to be the same figure in the same unit: the operator confirms on the strength of the
+    # scan's, and an apply that reports a different number leaves him unable to tell what was done to his world
+    sc, ap = summary(out.get("scan", "")), summary(out.get("apply", ""))
+    if p.check(sc and ap, f"the summary does not parse (scan {bool(sc)}, apply {bool(ap)}): the figures cannot be compared"):
+        for k in sorted(set(sc) & set(ap)):
+            p.check(sc[k]["repair"] == ap[k]["repair"],
+                    f"{k}: the scan offered {sc[k]['repair']} and the apply did {ap[k]['repair']} (the same unit, or the "
+                    f"operator confirmed a different figure)")
+        print("MEND offer vs done: " + ", ".join(f"{k} {sc[k]['repair']}/{ap[k]['repair']}"
+                                                 + (f" ({ap[k]['blocks']} blocks)" if ap[k]["blocks"] else "")
+                                                 for k in sorted(set(sc) & set(ap))), flush=True)
+        # and the blocks the command says it changed are the blocks the region files had: read apart, by another rule
+        if town:
+            p.check(ap.get("water", {}).get("blocks", 0) == standing_before,
+                    f"water: the command says {ap.get('water', {}).get('blocks', 0)} blocks and the world had "
+                    f"{standing_before} standing")
+            p.check(ap.get("streams", {}).get("blocks", 0) == unfed_before,
+                    f"streams: the command says {ap.get('streams', {}).get('blocks', 0)} blocks and the world had "
+                    f"{unfed_before} running with no source")
     m = re.search(MEND_DONE, out.get("again", ""))
     if p.check(m, "no second run"):
         p.check(" 0 to repair" in m.group(7) and not re.search(r"[1-9]\d* to repair", m.group(7)),

@@ -568,6 +568,12 @@ _T = {
                             "%s: %s reparados, %s em ordem, %s deixados como estão, %s avisos",
                             "%s: %s reparats, %s bé, %s que no es toquen, %s avisos",
                             "%s: %s reparados, %s ben, %s que non se tocan, %s avisos"),
+    # how many blocks of the world a repair is about: the places are the command's unit, the blocks are the figure a
+    # person can judge before confirming something that cannot be undone
+    "actualizar.reparar.bloques": ("%s: %s bloques del mundo en total", "%s: %s blocks of the world in all",
+                        "%s : %s blocs du monde en tout", "%s: %s Blöcke der Welt insgesamt",
+                        "%s: %s blocchi del mondo in tutto", "%s: %s blocos do mundo no total",
+                        "%s: %s blocs del món en total", "%s: %s bloques do mundo en total"),
     "actualizar.reparar.streams": ("arroyos sin fuente junto a la Casa del Heraldo", "streams with no source by the Herald's House",
                         "ruisseaux sans source près de la Maison du Héraut", "Bäche ohne Quelle beim Haus des Herolds",
                         "ruscelli senza sorgente presso la Casa dell'Araldo", "riachos sem nascente junto à Casa do Arauto",

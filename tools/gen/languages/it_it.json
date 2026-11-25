@@ -2114,6 +2114,7 @@
   "heraldia.actualizar.reparar.dialogo": "Riparare i difetti di generazione",
   "heraldia.actualizar.reparar.linea": "%s: %s da riparare, %s a posto, %s lasciati così, %s avvisi",
   "heraldia.actualizar.reparar.linea.hecho": "%s: %s riparati, %s a posto, %s lasciati così, %s avvisi",
+  "heraldia.actualizar.reparar.bloques": "%s: %s blocchi del mondo in tutto",
   "heraldia.actualizar.reparar.streams": "ruscelli senza sorgente presso la Casa dell'Araldo",
   "heraldia.actualizar.reparar.water": "acqua ferma sospesa nel vuoto presso la Casa dell'Araldo",
   "heraldia.actualizar.reparar.anillo": "anello della Casa dell'Araldo: %s gradini di un blocco a rampa (risaie). Non riparato: rifare il terreno dove vive la gente non distingue la terra del generatore da quella di un giocatore. Un villaggio costruito oggi ha le terrazze.",
