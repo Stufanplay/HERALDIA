@@ -92,6 +92,11 @@ import org.slf4j.LoggerFactory;
  * in a world that already has it. Heraldia builds each structure once, so when a generator bug is fixed new worlds come
  * out right and what was already built stays as it was. The repairs (each one asked for by itself, or {@code all}):
  * <ul>
+ * <li>{@code water}: still water left standing in the air with no source around the Herald's House (the same build
+ * drained a pond without block updates): settled by the very code a town built today uses ({@link Repairs#settle},
+ * herald/Shores), so each body is drained or banked. It writes blocks in the world and {@code all} includes it. Water
+ * that something feeds is not this fault and is left: by the game's rules a source, or a waterlogged block of the
+ * town's own walls, is a source.</li>
  * <li>{@code streams}: running water left with no source around the Herald's House (its build drained a pond without block
  * updates before the running-water fix; what had run down the hillside stayed, a stream from nowhere): taken away, as
  * herald/Shores.dry does in a town built today ({@link Streams}). A player's water always has its tick, so it never
@@ -116,8 +121,8 @@ import org.slf4j.LoggerFactory;
  * the slowest step in the log and in the report; a step over {@link #SLOW_MS} ms is logged as slow.</li>
  * </ul>
  * Left out on purpose (docs/LESSONS.md): the grounds' "rice terraces" (rebuilding the terrain round a town people live in
- * cannot tell the generator's earth from a player's), still water standing in the air (pending a reachable
- * herald/Shores), and the welcome decorations on mossy supports (they are put up at run time, so they come on their own
+ * cannot tell the generator's earth from a player's), the water that runs because something feeds it (by the game's
+ * rules it has a source: a separate fault), and the welcome decorations on mossy supports (they are put up at run time, so they come on their own
  * once the support check is fixed; nothing in the world records them as declined).
  */
 public final class GenerationMend {
