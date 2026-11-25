@@ -20,7 +20,7 @@ GATE = "oak_fence_gate"
 TH = {"gate": GATE}
 
 
-def room(w=5, d=5, corridor=False, rungs=4):
+def room(w=5, d=5, corridor=False, rungs=4, far=False):
     """A room of w x d with a loft at y = 4 and a ladder in the corner from the floor (feet y = 1) to the loft.
     `corridor`: the room is 1 cell wide, so the ladder stands in the only passage from the door to the back."""
     t = Template("t/houses/toy")
@@ -37,7 +37,7 @@ def room(w=5, d=5, corridor=False, rungs=4):
     for x in range(1, w - 1):
         for z in range(1, d - 1):
             t.set(x, 4, z, "oak_planks")
-    lx, lz = 1, (4 if corridor else 1)
+    lx, lz = 1, (4 if corridor else (d - 2 if far else 1))
     for y in range(1, 1 + rungs):
         t.set(lx, y, lz, "ladder[facing=east]")
     dx = 1 if corridor else 2
@@ -55,9 +55,23 @@ def test_a_loft_up_a_ladder_strands_a_villager():
     assert [m for m, _ in ladders.issues(t)] == ["escalera de mano que deja al aldeano varado"]
 
 
-def test_the_gate_in_the_ladders_own_foot_shuts_it():
-    t, (lx, lz) = room()
+def test_the_gate_goes_beside_the_ladder_when_there_is_room():
+    """The shape of the medium structures: the player then walks in and climbs without jumping."""
+    t, (lx, lz) = room(w=6, d=6, far=True)
+    assert ladders.shut(t, TH) == 2
+    assert t.closets[0]["shape"] == "beside"
+    assert sorted(t.closets[0]["cells"]) == [(lx, 1, lz - 1), (lx + 1, 1, lz)]
+    assert t.get(lx, 1, lz) == "minecraft:ladder[facing=east]"      # the rungs are untouched
+    assert ladders.stranded(t) == set()
+    assert ladders.issues(t) == []
+    after = set(lint.walk(t))
+    assert (lx, 5, lz) in after and (lx, 1, lz) in after            # the player reaches the ladder and the loft
+
+
+def test_the_gate_falls_back_to_the_ladders_own_foot_when_it_would_shut_a_passage():
+    t, (lx, lz) = room()                     # the door leads into the cell beside the ladder
     assert ladders.shut(t, TH) == 1
+    assert t.closets[0]["shape"] == "rung"
     assert len(t.closets) == 1 and list(t.closets[0]["cells"]) == [(lx, 1, lz)]
     assert t.get(lx, 1, lz).startswith("minecraft:" + GATE) and "open=false" in t.get(lx, 1, lz)
     assert t.get(lx, 2, lz) == "minecraft:ladder[facing=east]"      # the rungs above are untouched

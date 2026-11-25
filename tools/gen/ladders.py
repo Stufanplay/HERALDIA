@@ -19,6 +19,9 @@ is how a closet turns into a walled-off room (an experimental closet once walled
 import copy
 
 MIN_RUNGS = 4          # a ladder of 4 or more: 3 is the longest drop a villager's search takes
+MARGIN = 3             # flat ground modelled around the piece. Less than `_paths.MARGIN` (16, the walk to a bed):
+                       # here the ground is only needed to walk round the piece and in at its doors, and a ring three
+                       # blocks wide does that, at a fifth of the cells.
 
 # The kinds of `pack.Registry.kinds` that are village pieces: those a village's jigsaw places, and so the ones a
 # village's villagers walk. The medium structures keep their own closets (`mediums/_common.ladder_closet`) and the
@@ -38,17 +41,15 @@ def columns(t):
 
 def _ground(t):
     from mediums import _paths as P
-    return P.Ground(t)
+    return P.Ground(t, margin=MARGIN)
 
 
 def ground_walk(t, g=None):
-    """The cells a villager reaches on foot from the flat ground modelled around the piece (`_paths.MARGIN`)."""
-    from mediums import _paths as P
+    """The cells a villager reaches on foot from the flat ground modelled around the piece (its outer ring in)."""
     g = g or _ground(t)
-    sx, _, sz = t.size()
-    m = P.MARGIN
-    starts = [(x, 0, z) for x in range(-m, sx + m) for z in (-m, sz + m - 1) if g.floor(x, 0, z) is not None]
-    starts += [(x, 0, z) for z in range(-m, sz + m) for x in (-m, sx + m - 1) if g.floor(x, 0, z) is not None]
+    x0, z0, x1, z1 = g.box
+    starts = [(x, 0, z) for x in range(x0, x1) for z in (z0, z1 - 1) if g.floor(x, 0, z) is not None]
+    starts += [(x, 0, z) for z in range(z0, z1) for x in (x0, x1 - 1) if g.floor(x, 0, z) is not None]
     walk, todo = set(starts), list(starts)
     while todo:
         for c in g.neighbors(todo.pop()):
@@ -79,27 +80,80 @@ def entries(t, walk=None, g=None):
 FACING = {(0, -1): "north", (0, 1): "south", (1, 0): "east", (-1, 0): "west"}
 
 
+ORTH = ((1, 0), (-1, 0), (0, 1), (0, -1))
+
+
+def _gate(th, facing):
+    return f"{th['gate']}[facing={facing},in_wall=false,open=false,powered=false]"
+
+
+def _undo(t, cells):
+    for c, was in cells.items():
+        if was is None:
+            t.blocks.pop(c, None)
+        else:
+            t.blocks[c] = was
+
+
+def _beside(t, th, lad, rungs, g, walk, player):
+    """The closet of the medium structures: a gate in each cell a villager would walk into the ladder from. The
+    player then walks in and climbs without jumping. Returns the cells, or None when this shape would shut the
+    villager out of a cell that is not the ladder (the ladder stands in a passage: that is how the crude closet
+    walled off the nave of 18 church templates) or take a cell from the player."""
+    x, z, _, _ = lad
+    cells = {}
+    for rx, ry, rz in rungs:
+        for dx, dz in ORTH:
+            c = (rx + dx, ry, rz + dz)
+            if c not in cells and c in walk and g.floor(*c) is not None:
+                cells[c] = t.blocks.get(c)
+    if not cells or any(c in {tuple(j["pos"]) for j in t.jigsaws} for c in cells):
+        return None
+    for c in cells:
+        t.set(c[0], c[1], c[2], _gate(th, FACING[(c[0] - x, c[2] - z)]))
+    rung_cells = {(lx, ly, lz) for lx, lz, y0, y1 in columns(t) for ly in range(y0, y1 + 2)}
+    if (walk - ground_walk(t) - set(cells) - rung_cells) or (player - _player_walk(t)):
+        _undo(t, cells)
+        return None
+    return cells
+
+
+def _in_the_rungs(t, th, rungs):
+    """The ladder's own foot becomes the gate: it takes no floor cell and leaves every passage clear, but the lowest
+    rung is then at the player's head and it has to jump once to catch the ladder (measured with Carpet's fake
+    player). Used only where `_beside` does not fit."""
+    cells = {}
+    for x, y, z in rungs:
+        st = t.get(x, y, z) or ""
+        facing = st.split("facing=")[1].split(",")[0].split("]")[0] if "facing=" in st else "north"
+        cells[(x, y, z)] = t.blocks.get((x, y, z))
+        t.set(x, y, z, _gate(th, facing))
+    return cells
+
+
 def shut(t, th):
-    """Shut every ladder of the piece a villager could climb from the ground: the rung it would walk into becomes a
-    CLOSED FENCE GATE in the ladder's own cell. The villager cannot pass it (and cannot stand on the rung above one
-    either, `_paths.Ground._stand`); the player opens it, stands in it and climbs from the rung above, which is at its
-    head. The gate takes no floor cell from anyone and leaves every passage clear -- gating the cells BESIDE the
-    ladder instead walls off the room when the ladder stands in a corridor. Recorded on `t.closets` for the audit.
-    Returns how many gates were placed."""
-    g = _ground(t)
-    walk = ground_walk(t, g)
+    """Shut every ladder of the piece a villager could climb from the ground, behind a closed fence gate: villagers
+    never open one, players do (`lint.passable`, and measured on a server: 12 of 12 gates opened by a fake player).
+    The shape is chosen per ladder, by measuring: the gate goes in the cells BESIDE the ladder, so that the player
+    climbs without jumping, unless that would shut the villager out of a passage or cost the player a cell, in which
+    case the ladder's own foot becomes the gate. Recorded on `t.closets` for the audit; returns how many gates were
+    placed."""
     n = 0
-    for lad, rungs in entries(t, walk, g):
-        placed = {}
-        for x, y, z in rungs:
-            st = t.get(x, y, z) or ""
-            facing = st.split("facing=")[1].split(",")[0].split("]")[0] if "facing=" in st else "north"
-            placed[(x, y, z)] = t.blocks.get((x, y, z))
-            t.set(x, y, z, f"{th['gate']}[facing={facing},in_wall=false,open=false,powered=false]")
-            n += 1
-        if placed:
-            t.closets.append({"ladder": lad, "cells": placed})
-    return n
+    while True:
+        g = _ground(t)
+        walk = ground_walk(t, g)
+        todo = entries(t, walk, g)
+        if not todo:
+            return n
+        lad, rungs = todo[0]
+        player = _player_walk(t)
+        cells, shape = _beside(t, th, lad, rungs, g, walk, player), "beside"
+        if cells is None:
+            cells, shape = _in_the_rungs(t, th, rungs), "rung"
+        if not cells:
+            return n                       # nothing could be placed: the audit fails on the ladder instead
+        t.closets.append({"ladder": lad, "cells": cells, "shape": shape})
+        n += len(cells)
 
 
 def _without_closets(t):
