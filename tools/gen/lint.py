@@ -325,12 +325,17 @@ def access_issues(t):
     return out
 
 
-def template_issues(t):
+def template_issues(t, kind=None):
     # double doors and stair headroom: in all templates, including those audited separately
     iss = door_pair_issues(t) + stair_headroom_issues(t)
     if not getattr(t, "no_generic_audit", False):   # structures audited as a whole in their module
         # lint_view: the same piece with its mechanisms activated (e.g. secret doors open)
         iss += support_issues(t) + access_issues(getattr(t, "lint_view", None) or t)
+    if kind is not None:
+        import ladders
+        if ladders.is_village(kind):
+            # a village ladder a villager can climb from the ground, and the closet that shuts its foot
+            iss += ladders.issues(t)
     return iss
 
 
@@ -338,7 +343,8 @@ def lint_registry(reg, only=None):
     """{template: warnings} of the generic audit, in registry order (split across processes)."""
     import parallel
     names = [n for n in reg.templates if not only or only(n)]
-    found = parallel.map_obj(lambda n: template_issues(reg.templates[n]), names, chunksize=8)
+    kinds = getattr(reg, "kinds", {})        # the kind picks the audits of a village piece (ladders.issues)
+    found = parallel.map_obj(lambda n: template_issues(reg.templates[n], kinds.get(n)), names, chunksize=8)
     return {n: iss for n, iss in zip(names, found) if iss}
 
 
