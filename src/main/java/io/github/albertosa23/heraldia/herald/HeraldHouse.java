@@ -147,7 +147,8 @@ public final class HeraldHouse {
 		return p;
 	}
 
-	static @Nullable Grounds grounds() {
+	/** The town placed in this world (null without one); also read by update/GenerationMend. */
+	public static @Nullable Grounds grounds() {
 		return grounds;
 	}
 

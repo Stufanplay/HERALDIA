@@ -1,0 +1,1416 @@
+{
+ "kind": "inn",
+ "pieces": [
+  {
+   "cells": [
+    {
+     "after": "minecraft:chest[facing=south]",
+     "before": [
+      "minecraft:air",
+      "minecraft:air",
+      "minecraft:air",
+      "minecraft:air"
+     ],
+     "pos": [
+      12,
+      1,
+      5
+     ]
+    },
+    {
+     "after": "minecraft:air",
+     "before": [
+      "minecraft:chest[facing=west]",
+      "minecraft:chest[facing=west]",
+      "minecraft:chest[facing=west]",
+      "minecraft:chest[facing=west]"
+     ],
+     "pos": [
+      15,
+      1,
+      8
+     ]
+    },
+    {
+     "after": "minecraft:birch_door[facing=west,half=lower,hinge=left,open=false,powered=false]",
+     "before": [
+      "minecraft:birch_planks",
+      "minecraft:birch_planks",
+      "minecraft:birch_planks",
+      "minecraft:birch_planks"
+     ],
+     "pos": [
+      16,
+      1,
+      8
+     ]
+    },
+    {
+     "after": "minecraft:birch_door[facing=west,half=upper,hinge=left,open=false,powered=false]",
+     "before": [
+      "minecraft:glass_pane",
+      "minecraft:glass_pane",
+      "minecraft:glass_pane",
+      "minecraft:glass_pane"
+     ],
+     "pos": [
+      16,
+      2,
+      8
+     ]
+    }
+   ],
+   "guards": [
+    {
+     "block": "minecraft:air",
+     "pos": [
+      13,
+      1,
+      5
+     ]
+    },
+    {
+     "block": "minecraft:birch_planks",
+     "pos": [
+      11,
+      1,
+      5
+     ]
+    },
+    {
+     "block": "minecraft:air",
+     "pos": [
+      12,
+      2,
+      5
+     ]
+    },
+    {
+     "block": "minecraft:birch_planks",
+     "pos": [
+      12,
+      0,
+      5
+     ]
+    },
+    {
+     "block": "minecraft:air",
+     "pos": [
+      12,
+      1,
+      6
+     ]
+    },
+    {
+     "block": "minecraft:birch_planks",
+     "pos": [
+      12,
+      1,
+      4
+     ]
+    },
+    {
+     "block": "minecraft:air",
+     "pos": [
+      14,
+      1,
+      8
+     ]
+    },
+    {
+     "block": "minecraft:air",
+     "pos": [
+      15,
+      2,
+      8
+     ]
+    },
+    {
+     "block": "minecraft:birch_planks",
+     "pos": [
+      15,
+      0,
+      8
+     ]
+    },
+    {
+     "block": "minecraft:air",
+     "pos": [
+      15,
+      1,
+      9
+     ]
+    },
+    {
+     "block": "minecraft:air",
+     "pos": [
+      15,
+      1,
+      7
+     ]
+    },
+    {
+     "block": "minecraft:air",
+     "pos": [
+      17,
+      1,
+      8
+     ]
+    },
+    {
+     "block": "minecraft:stone_bricks",
+     "pos": [
+      16,
+      0,
+      8
+     ]
+    },
+    {
+     "block": "minecraft:birch_planks",
+     "pos": [
+      16,
+      1,
+      9
+     ]
+    },
+    {
+     "block": "minecraft:birch_planks",
+     "pos": [
+      16,
+      1,
+      7
+     ]
+    },
+    {
+     "block": "minecraft:air",
+     "pos": [
+      17,
+      2,
+      8
+     ]
+    },
+    {
+     "block": "minecraft:birch_planks",
+     "pos": [
+      16,
+      3,
+      8
+     ]
+    },
+    {
+     "block": "minecraft:birch_planks",
+     "pos": [
+      16,
+      2,
+      9
+     ]
+    },
+    {
+     "block": "minecraft:birch_planks",
+     "pos": [
+      16,
+      2,
+      7
+     ]
+    }
+   ],
+   "moves": [
+    {
+     "from": [
+      15,
+      1,
+      8
+     ],
+     "to": [
+      12,
+      1,
+      5
+     ]
+    }
+   ],
+   "template": "heraldia:medianas/posada/bosque/a",
+   "versions": [
+    "c8b9a66",
+    "db7efb3",
+    "f5d3e21",
+    "62b90db"
+   ]
+  },
+  {
+   "cells": [
+    {
+     "after": "minecraft:chest[facing=south]",
+     "before": [
+      "minecraft:air",
+      "minecraft:air",
+      "minecraft:air",
+      "minecraft:air"
+     ],
+     "pos": [
+      12,
+      1,
+      5
+     ]
+    },
+    {
+     "after": "minecraft:air",
+     "before": [
+      "minecraft:chest[facing=west]",
+      "minecraft:chest[facing=west]",
+      "minecraft:chest[facing=west]",
+      "minecraft:chest[facing=west]"
+     ],
+     "pos": [
+      15,
+      1,
+      8
+     ]
+    },
+    {
+     "after": "minecraft:birch_door[facing=west,half=lower,hinge=left,open=false,powered=false]",
+     "before": [
+      "minecraft:birch_planks",
+      "minecraft:birch_planks",
+      "minecraft:birch_planks",
+      "minecraft:birch_planks"
+     ],
+     "pos": [
+      16,
+      1,
+      8
+     ]
+    },
+    {
+     "after": "minecraft:birch_door[facing=west,half=upper,hinge=left,open=false,powered=false]",
+     "before": [
+      "minecraft:glass_pane",
+      "minecraft:glass_pane",
+      "minecraft:glass_pane",
+      "minecraft:glass_pane"
+     ],
+     "pos": [
+      16,
+      2,
+      8
+     ]
+    }
+   ],
+   "guards": [
+    {
+     "block": "minecraft:air",
+     "pos": [
+      13,
+      1,
+      5
+     ]
+    },
+    {
+     "block": "minecraft:birch_planks",
+     "pos": [
+      11,
+      1,
+      5
+     ]
+    },
+    {
+     "block": "minecraft:air",
+     "pos": [
+      12,
+      2,
+      5
+     ]
+    },
+    {
+     "block": "minecraft:birch_planks",
+     "pos": [
+      12,
+      0,
+      5
+     ]
+    },
+    {
+     "block": "minecraft:air",
+     "pos": [
+      12,
+      1,
+      6
+     ]
+    },
+    {
+     "block": "minecraft:birch_planks",
+     "pos": [
+      12,
+      1,
+      4
+     ]
+    },
+    {
+     "block": "minecraft:air",
+     "pos": [
+      14,
+      1,
+      8
+     ]
+    },
+    {
+     "block": "minecraft:air",
+     "pos": [
+      15,
+      2,
+      8
+     ]
+    },
+    {
+     "block": "minecraft:birch_planks",
+     "pos": [
+      15,
+      0,
+      8
+     ]
+    },
+    {
+     "block": "minecraft:air",
+     "pos": [
+      15,
+      1,
+      9
+     ]
+    },
+    {
+     "block": "minecraft:air",
+     "pos": [
+      15,
+      1,
+      7
+     ]
+    },
+    {
+     "block": "minecraft:air",
+     "pos": [
+      17,
+      1,
+      8
+     ]
+    },
+    {
+     "block": "minecraft:stone_bricks",
+     "pos": [
+      16,
+      0,
+      8
+     ]
+    },
+    {
+     "block": "minecraft:birch_planks",
+     "pos": [
+      16,
+      1,
+      9
+     ]
+    },
+    {
+     "block": "minecraft:birch_planks",
+     "pos": [
+      16,
+      1,
+      7
+     ]
+    },
+    {
+     "block": "minecraft:air",
+     "pos": [
+      17,
+      2,
+      8
+     ]
+    },
+    {
+     "block": "minecraft:birch_planks",
+     "pos": [
+      16,
+      3,
+      8
+     ]
+    },
+    {
+     "block": "minecraft:birch_planks",
+     "pos": [
+      16,
+      2,
+      9
+     ]
+    },
+    {
+     "block": "minecraft:birch_planks",
+     "pos": [
+      16,
+      2,
+      7
+     ]
+    }
+   ],
+   "moves": [
+    {
+     "from": [
+      15,
+      1,
+      8
+     ],
+     "to": [
+      12,
+      1,
+      5
+     ]
+    }
+   ],
+   "template": "heraldia:medianas/posada/bosque/b",
+   "versions": [
+    "c8b9a66",
+    "db7efb3",
+    "f5d3e21",
+    "62b90db"
+   ]
+  },
+  {
+   "cells": [
+    {
+     "after": "minecraft:chest[facing=south]",
+     "before": [
+      "minecraft:air",
+      "minecraft:air",
+      "minecraft:air",
+      "minecraft:air"
+     ],
+     "pos": [
+      12,
+      1,
+      5
+     ]
+    },
+    {
+     "after": "minecraft:air",
+     "before": [
+      "minecraft:chest[facing=west]",
+      "minecraft:chest[facing=west]",
+      "minecraft:chest[facing=west]",
+      "minecraft:chest[facing=west]"
+     ],
+     "pos": [
+      15,
+      1,
+      8
+     ]
+    },
+    {
+     "after": "minecraft:oak_door[facing=west,half=lower,hinge=left,open=false,powered=false]",
+     "before": [
+      "minecraft:oak_planks",
+      "minecraft:oak_planks",
+      "minecraft:oak_planks",
+      "minecraft:oak_planks"
+     ],
+     "pos": [
+      16,
+      1,
+      8
+     ]
+    },
+    {
+     "after": "minecraft:oak_door[facing=west,half=upper,hinge=left,open=false,powered=false]",
+     "before": [
+      "minecraft:glass_pane",
+      "minecraft:glass_pane",
+      "minecraft:glass_pane",
+      "minecraft:glass_pane"
+     ],
+     "pos": [
+      16,
+      2,
+      8
+     ]
+    }
+   ],
+   "guards": [
+    {
+     "block": "minecraft:air",
+     "pos": [
+      13,
+      1,
+      5
+     ]
+    },
+    {
+     "block": "minecraft:oak_planks",
+     "pos": [
+      11,
+      1,
+      5
+     ]
+    },
+    {
+     "block": "minecraft:air",
+     "pos": [
+      12,
+      2,
+      5
+     ]
+    },
+    {
+     "block": "minecraft:oak_planks",
+     "pos": [
+      12,
+      0,
+      5
+     ]
+    },
+    {
+     "block": "minecraft:air",
+     "pos": [
+      12,
+      1,
+      6
+     ]
+    },
+    {
+     "block": "minecraft:oak_planks",
+     "pos": [
+      12,
+      1,
+      4
+     ]
+    },
+    {
+     "block": "minecraft:air",
+     "pos": [
+      14,
+      1,
+      8
+     ]
+    },
+    {
+     "block": "minecraft:air",
+     "pos": [
+      15,
+      2,
+      8
+     ]
+    },
+    {
+     "block": "minecraft:oak_planks",
+     "pos": [
+      15,
+      0,
+      8
+     ]
+    },
+    {
+     "block": "minecraft:air",
+     "pos": [
+      15,
+      1,
+      9
+     ]
+    },
+    {
+     "block": "minecraft:air",
+     "pos": [
+      15,
+      1,
+      7
+     ]
+    },
+    {
+     "block": "minecraft:air",
+     "pos": [
+      17,
+      1,
+      8
+     ]
+    },
+    {
+     "block": "minecraft:cobblestone",
+     "pos": [
+      16,
+      0,
+      8
+     ]
+    },
+    {
+     "block": "minecraft:oak_planks",
+     "pos": [
+      16,
+      1,
+      9
+     ]
+    },
+    {
+     "block": "minecraft:oak_planks",
+     "pos": [
+      16,
+      1,
+      7
+     ]
+    },
+    {
+     "block": "minecraft:air",
+     "pos": [
+      17,
+      2,
+      8
+     ]
+    },
+    {
+     "block": "minecraft:oak_planks",
+     "pos": [
+      16,
+      3,
+      8
+     ]
+    },
+    {
+     "block": "minecraft:oak_planks",
+     "pos": [
+      16,
+      2,
+      9
+     ]
+    },
+    {
+     "block": "minecraft:oak_planks",
+     "pos": [
+      16,
+      2,
+      7
+     ]
+    }
+   ],
+   "moves": [
+    {
+     "from": [
+      15,
+      1,
+      8
+     ],
+     "to": [
+      12,
+      1,
+      5
+     ]
+    }
+   ],
+   "template": "heraldia:medianas/posada/llanura/a",
+   "versions": [
+    "c8b9a66",
+    "db7efb3",
+    "f5d3e21",
+    "62b90db"
+   ]
+  },
+  {
+   "cells": [
+    {
+     "after": "minecraft:chest[facing=south]",
+     "before": [
+      "minecraft:air",
+      "minecraft:air",
+      "minecraft:air",
+      "minecraft:air"
+     ],
+     "pos": [
+      12,
+      1,
+      5
+     ]
+    },
+    {
+     "after": "minecraft:air",
+     "before": [
+      "minecraft:chest[facing=west]",
+      "minecraft:chest[facing=west]",
+      "minecraft:chest[facing=west]",
+      "minecraft:chest[facing=west]"
+     ],
+     "pos": [
+      15,
+      1,
+      8
+     ]
+    },
+    {
+     "after": "minecraft:oak_door[facing=west,half=lower,hinge=left,open=false,powered=false]",
+     "before": [
+      "minecraft:oak_planks",
+      "minecraft:oak_planks",
+      "minecraft:oak_planks",
+      "minecraft:oak_planks"
+     ],
+     "pos": [
+      16,
+      1,
+      8
+     ]
+    },
+    {
+     "after": "minecraft:oak_door[facing=west,half=upper,hinge=left,open=false,powered=false]",
+     "before": [
+      "minecraft:glass_pane",
+      "minecraft:glass_pane",
+      "minecraft:glass_pane",
+      "minecraft:glass_pane"
+     ],
+     "pos": [
+      16,
+      2,
+      8
+     ]
+    }
+   ],
+   "guards": [
+    {
+     "block": "minecraft:air",
+     "pos": [
+      13,
+      1,
+      5
+     ]
+    },
+    {
+     "block": "minecraft:oak_planks",
+     "pos": [
+      11,
+      1,
+      5
+     ]
+    },
+    {
+     "block": "minecraft:air",
+     "pos": [
+      12,
+      2,
+      5
+     ]
+    },
+    {
+     "block": "minecraft:oak_planks",
+     "pos": [
+      12,
+      0,
+      5
+     ]
+    },
+    {
+     "block": "minecraft:air",
+     "pos": [
+      12,
+      1,
+      6
+     ]
+    },
+    {
+     "block": "minecraft:oak_planks",
+     "pos": [
+      12,
+      1,
+      4
+     ]
+    },
+    {
+     "block": "minecraft:air",
+     "pos": [
+      14,
+      1,
+      8
+     ]
+    },
+    {
+     "block": "minecraft:air",
+     "pos": [
+      15,
+      2,
+      8
+     ]
+    },
+    {
+     "block": "minecraft:oak_planks",
+     "pos": [
+      15,
+      0,
+      8
+     ]
+    },
+    {
+     "block": "minecraft:air",
+     "pos": [
+      15,
+      1,
+      9
+     ]
+    },
+    {
+     "block": "minecraft:air",
+     "pos": [
+      15,
+      1,
+      7
+     ]
+    },
+    {
+     "block": "minecraft:air",
+     "pos": [
+      17,
+      1,
+      8
+     ]
+    },
+    {
+     "block": "minecraft:cobblestone",
+     "pos": [
+      16,
+      0,
+      8
+     ]
+    },
+    {
+     "block": "minecraft:oak_planks",
+     "pos": [
+      16,
+      1,
+      9
+     ]
+    },
+    {
+     "block": "minecraft:oak_planks",
+     "pos": [
+      16,
+      1,
+      7
+     ]
+    },
+    {
+     "block": "minecraft:air",
+     "pos": [
+      17,
+      2,
+      8
+     ]
+    },
+    {
+     "block": "minecraft:oak_planks",
+     "pos": [
+      16,
+      3,
+      8
+     ]
+    },
+    {
+     "block": "minecraft:oak_planks",
+     "pos": [
+      16,
+      2,
+      9
+     ]
+    },
+    {
+     "block": "minecraft:oak_planks",
+     "pos": [
+      16,
+      2,
+      7
+     ]
+    }
+   ],
+   "moves": [
+    {
+     "from": [
+      15,
+      1,
+      8
+     ],
+     "to": [
+      12,
+      1,
+      5
+     ]
+    }
+   ],
+   "template": "heraldia:medianas/posada/llanura/b",
+   "versions": [
+    "c8b9a66",
+    "db7efb3",
+    "f5d3e21",
+    "62b90db"
+   ]
+  },
+  {
+   "cells": [
+    {
+     "after": "minecraft:chest[facing=south]",
+     "before": [
+      "minecraft:air",
+      "minecraft:air",
+      "minecraft:air",
+      "minecraft:air"
+     ],
+     "pos": [
+      12,
+      1,
+      5
+     ]
+    },
+    {
+     "after": "minecraft:air",
+     "before": [
+      "minecraft:chest[facing=west]",
+      "minecraft:chest[facing=west]",
+      "minecraft:chest[facing=west]",
+      "minecraft:chest[facing=west]"
+     ],
+     "pos": [
+      15,
+      1,
+      8
+     ]
+    },
+    {
+     "after": "minecraft:acacia_door[facing=west,half=lower,hinge=left,open=false,powered=false]",
+     "before": [
+      "minecraft:white_terracotta",
+      "minecraft:white_terracotta",
+      "minecraft:white_terracotta",
+      "minecraft:white_terracotta"
+     ],
+     "pos": [
+      16,
+      1,
+      8
+     ]
+    },
+    {
+     "after": "minecraft:acacia_door[facing=west,half=upper,hinge=left,open=false,powered=false]",
+     "before": [
+      "minecraft:glass_pane",
+      "minecraft:glass_pane",
+      "minecraft:glass_pane",
+      "minecraft:glass_pane"
+     ],
+     "pos": [
+      16,
+      2,
+      8
+     ]
+    }
+   ],
+   "guards": [
+    {
+     "block": "minecraft:air",
+     "pos": [
+      13,
+      1,
+      5
+     ]
+    },
+    {
+     "block": "minecraft:white_terracotta",
+     "pos": [
+      11,
+      1,
+      5
+     ]
+    },
+    {
+     "block": "minecraft:air",
+     "pos": [
+      12,
+      2,
+      5
+     ]
+    },
+    {
+     "block": "minecraft:acacia_planks",
+     "pos": [
+      12,
+      0,
+      5
+     ]
+    },
+    {
+     "block": "minecraft:air",
+     "pos": [
+      12,
+      1,
+      6
+     ]
+    },
+    {
+     "block": "minecraft:white_terracotta",
+     "pos": [
+      12,
+      1,
+      4
+     ]
+    },
+    {
+     "block": "minecraft:air",
+     "pos": [
+      14,
+      1,
+      8
+     ]
+    },
+    {
+     "block": "minecraft:air",
+     "pos": [
+      15,
+      2,
+      8
+     ]
+    },
+    {
+     "block": "minecraft:acacia_planks",
+     "pos": [
+      15,
+      0,
+      8
+     ]
+    },
+    {
+     "block": "minecraft:air",
+     "pos": [
+      15,
+      1,
+      9
+     ]
+    },
+    {
+     "block": "minecraft:air",
+     "pos": [
+      15,
+      1,
+      7
+     ]
+    },
+    {
+     "block": "minecraft:air",
+     "pos": [
+      17,
+      1,
+      8
+     ]
+    },
+    {
+     "block": "minecraft:smooth_sandstone",
+     "pos": [
+      16,
+      0,
+      8
+     ]
+    },
+    {
+     "block": "minecraft:white_terracotta",
+     "pos": [
+      16,
+      1,
+      9
+     ]
+    },
+    {
+     "block": "minecraft:white_terracotta",
+     "pos": [
+      16,
+      1,
+      7
+     ]
+    },
+    {
+     "block": "minecraft:air",
+     "pos": [
+      17,
+      2,
+      8
+     ]
+    },
+    {
+     "block": "minecraft:white_terracotta",
+     "pos": [
+      16,
+      3,
+      8
+     ]
+    },
+    {
+     "block": "minecraft:white_terracotta",
+     "pos": [
+      16,
+      2,
+      9
+     ]
+    },
+    {
+     "block": "minecraft:white_terracotta",
+     "pos": [
+      16,
+      2,
+      7
+     ]
+    }
+   ],
+   "moves": [
+    {
+     "from": [
+      15,
+      1,
+      8
+     ],
+     "to": [
+      12,
+      1,
+      5
+     ]
+    }
+   ],
+   "template": "heraldia:medianas/posada/sabana/a",
+   "versions": [
+    "c8b9a66",
+    "db7efb3",
+    "f5d3e21",
+    "62b90db"
+   ]
+  },
+  {
+   "cells": [
+    {
+     "after": "minecraft:chest[facing=south]",
+     "before": [
+      "minecraft:air",
+      "minecraft:air",
+      "minecraft:air",
+      "minecraft:air"
+     ],
+     "pos": [
+      12,
+      1,
+      5
+     ]
+    },
+    {
+     "after": "minecraft:air",
+     "before": [
+      "minecraft:chest[facing=west]",
+      "minecraft:chest[facing=west]",
+      "minecraft:chest[facing=west]",
+      "minecraft:chest[facing=west]"
+     ],
+     "pos": [
+      15,
+      1,
+      8
+     ]
+    },
+    {
+     "after": "minecraft:acacia_door[facing=west,half=lower,hinge=left,open=false,powered=false]",
+     "before": [
+      "minecraft:white_terracotta",
+      "minecraft:white_terracotta",
+      "minecraft:white_terracotta",
+      "minecraft:white_terracotta"
+     ],
+     "pos": [
+      16,
+      1,
+      8
+     ]
+    },
+    {
+     "after": "minecraft:acacia_door[facing=west,half=upper,hinge=left,open=false,powered=false]",
+     "before": [
+      "minecraft:glass_pane",
+      "minecraft:glass_pane",
+      "minecraft:glass_pane",
+      "minecraft:glass_pane"
+     ],
+     "pos": [
+      16,
+      2,
+      8
+     ]
+    }
+   ],
+   "guards": [
+    {
+     "block": "minecraft:air",
+     "pos": [
+      13,
+      1,
+      5
+     ]
+    },
+    {
+     "block": "minecraft:white_terracotta",
+     "pos": [
+      11,
+      1,
+      5
+     ]
+    },
+    {
+     "block": "minecraft:air",
+     "pos": [
+      12,
+      2,
+      5
+     ]
+    },
+    {
+     "block": "minecraft:acacia_planks",
+     "pos": [
+      12,
+      0,
+      5
+     ]
+    },
+    {
+     "block": "minecraft:air",
+     "pos": [
+      12,
+      1,
+      6
+     ]
+    },
+    {
+     "block": "minecraft:white_terracotta",
+     "pos": [
+      12,
+      1,
+      4
+     ]
+    },
+    {
+     "block": "minecraft:air",
+     "pos": [
+      14,
+      1,
+      8
+     ]
+    },
+    {
+     "block": "minecraft:air",
+     "pos": [
+      15,
+      2,
+      8
+     ]
+    },
+    {
+     "block": "minecraft:acacia_planks",
+     "pos": [
+      15,
+      0,
+      8
+     ]
+    },
+    {
+     "block": "minecraft:air",
+     "pos": [
+      15,
+      1,
+      9
+     ]
+    },
+    {
+     "block": "minecraft:air",
+     "pos": [
+      15,
+      1,
+      7
+     ]
+    },
+    {
+     "block": "minecraft:air",
+     "pos": [
+      17,
+      1,
+      8
+     ]
+    },
+    {
+     "block": "minecraft:smooth_sandstone",
+     "pos": [
+      16,
+      0,
+      8
+     ]
+    },
+    {
+     "block": "minecraft:white_terracotta",
+     "pos": [
+      16,
+      1,
+      9
+     ]
+    },
+    {
+     "block": "minecraft:white_terracotta",
+     "pos": [
+      16,
+      1,
+      7
+     ]
+    },
+    {
+     "block": "minecraft:air",
+     "pos": [
+      17,
+      2,
+      8
+     ]
+    },
+    {
+     "block": "minecraft:white_terracotta",
+     "pos": [
+      16,
+      3,
+      8
+     ]
+    },
+    {
+     "block": "minecraft:white_terracotta",
+     "pos": [
+      16,
+      2,
+      9
+     ]
+    },
+    {
+     "block": "minecraft:white_terracotta",
+     "pos": [
+      16,
+      2,
+      7
+     ]
+    }
+   ],
+   "moves": [
+    {
+     "from": [
+      15,
+      1,
+      8
+     ],
+     "to": [
+      12,
+      1,
+      5
+     ]
+    }
+   ],
+   "template": "heraldia:medianas/posada/sabana/b",
+   "versions": [
+    "c8b9a66",
+    "db7efb3",
+    "f5d3e21",
+    "62b90db"
+   ]
+  }
+ ],
+ "what": "the Roadside Inn's bedroom door (the innkeeper's bed out of his reach)"
+}

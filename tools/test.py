@@ -134,6 +134,9 @@ EVENTS = ["tools/smoke/village_events.py"]
 # chunks regenerated) and, for the Java in update/, also path B (new structures placed in generated chunks) and undo.
 SAFE_UPDATE = ["tools/smoke/update.py"]
 SAFE_UPDATE_JAVA = SAFE_UPDATE + ["tools/smoke/update_path_b.py"]
+# /heraldia update mend (update/GenerationMend and its patches): what an earlier generator built wrong, repaired. In CI
+# without an earlier jar the structures are aged by hand (tools/smoke/mend.py); with --old-jar it is the real thing.
+MEND = ["tools/smoke/mend.py"]
 
 # Path -> server tests map. It is traversed in order and the FIRST rule that matches wins (fnmatch: * crosses "/").
 # An empty list: the change needs no server tests (beyond the smoke test, which always runs in CI).
@@ -179,6 +182,8 @@ MAP = [
     # the quests test (the conversation as a vanilla client gets it) and the arena modes test (the bell's menu)
     # the look-only windows of the Herald's House area: the mark, the packets dropped and the test's packet commands
     (JAVA + "herald/LookOnly.java", HERALD_LOOK), (JAVA + "mixin/HeraldLook*", HERALD_LOOK),
+    (JAVA + "herald/Repairs.java", MEND), (JAVA + "update/GenerationMend.java", MEND), (JAVA + "update/TemplatePatch.java", MEND),
+    (JAVA + "update/Streams.java", MEND), ("src/main/resources/heraldia/mend/*", MEND), ("tools/repairs/*", MEND),
     (JAVA + "mixin/HeraldOpenMenuMixin.java", HERALD_LOOK), (JAVA + "mixin/HeraldCompoundContainerMixin.java", HERALD_LOOK),
     (JAVA + "choice/ClientPackets.java", HERALD_LOOK + QUESTS),
     (JAVA + "choice/*", QUESTS + ["tools/smoke/arena_modes.py"]),
@@ -193,7 +198,7 @@ MAP = [
     # village events (their spoken lines are in tools/gen/dialogue/*/events.json, matched above by the conversations' rule)
     (JAVA + "events/*", EVENTS), ("tools/gen/village_events.py", EVENTS),
     # safe updates (T46): their Java, the panel, the preferences, the menus, the migration and their texts
-    (JAVA + "update/*", SAFE_UPDATE_JAVA), (JAVA + "command/ConfigPanel.java", SAFE_UPDATE),
+    (JAVA + "update/Updater.java", SAFE_UPDATE_JAVA + MEND), (JAVA + "update/*", SAFE_UPDATE_JAVA), (JAVA + "command/ConfigPanel.java", SAFE_UPDATE),
     (JAVA + "command/Preferences.java", SAFE_UPDATE), (JAVA + "config/Menus.java", SAFE_UPDATE),
     (JAVA + "config/ConfigMigration.java", SAFE_UPDATE), ("tools/gen/updates.py", SAFE_UPDATE),
     # game profiles (T36): their logic and their command (the rest of the configuration is common: full suite)
@@ -415,6 +420,7 @@ DURATION_S = {
     "tools/smoke/light_profile.py": 55,             # three starts and 1,300 sprinted ticks
     "tools/smoke/update.py": 165,                # two starts and a zone of 400 chunks
     "tools/smoke/update_path_b.py": 160,         # five starts, a zone of ~200 chunks, path B and undo
+    "tools/smoke/mend.py": 215,                  # CI mode (no --old-jar): three starts, 6 inns and 8 wharfs found and loaded, a declined offer; measured locally (4 cores): 194 s + 10 %
     "tools/smoke/loot_restock.py": 95,             # two starts and a generated hermitage
     "tools/smoke/difficulty.py": 80,                # four starts of the same world
     "tools/smoke/arena.py": 215,                     # two starts, three builds and five waves, and the Herald's House (v2: 18 residents, a market day on its plaza); measured locally (4 cores): 184 s + 10 %

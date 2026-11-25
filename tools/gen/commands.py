@@ -65,6 +65,7 @@ CANONICAL = [
     "update analyze", "update apply", "update apply confirm", "update apply confirm <id>", "update apply confirm <id> backup",
     "update apply confirm <id> nobackup", "update apply confirm <id> nobackup risk", "update undo", "update undo confirm",
     "update undo confirm <id>", "update repair", "update repair dry-run",
+    "update mend", "update mend scan", "update mend apply", "update mend apply water", "update mend apply water confirm", "update mend apply water confirm <id>", "update mend apply streams", "update mend apply streams confirm", "update mend apply streams confirm <id>", "update mend apply wharf", "update mend apply wharf confirm", "update mend apply wharf confirm <id>", "update mend apply inn", "update mend apply inn confirm", "update mend apply inn confirm <id>", "update mend apply all", "update mend apply all confirm", "update mend apply all confirm <id>",
     "journal", "journal villages", "journal uniques", "journal mediums", "journal mines", "journal coast",
     "journal nether", "journal end",             # each player's journal: found and missing, by kind
     "journal chronicle", "journal chronicle book",   # the end of the Chronicle: guardians defeated; a copy of the last leaf

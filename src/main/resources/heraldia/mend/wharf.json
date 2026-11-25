@@ -1,0 +1,87 @@
+{
+ "kind": "wharf",
+ "pieces": [
+  {
+   "cells": [
+    {
+     "after": "minecraft:purpur_pillar[axis=y]",
+     "before": [
+      "minecraft:end_stone_brick_wall[east=none,north=none,south=none,up=true,waterlogged=false,west=none]",
+      "minecraft:end_stone_brick_wall[east=none,north=none,south=none,up=true,waterlogged=false,west=none]",
+      "minecraft:end_stone_brick_wall[east=none,north=none,south=none,up=true,waterlogged=false,west=none]"
+     ],
+     "pos": [
+      6,
+      1,
+      18
+     ]
+    }
+   ],
+   "guards": [
+    {
+     "block": "minecraft:air",
+     "pos": [
+      7,
+      1,
+      18
+     ]
+    },
+    {
+     "block": "minecraft:air",
+     "pos": [
+      5,
+      1,
+      18
+     ]
+    },
+    {
+     "block": "minecraft:air",
+     "pos": [
+      6,
+      2,
+      18
+     ]
+    },
+    {
+     "block": "minecraft:end_stone_bricks",
+     "pos": [
+      6,
+      0,
+      18
+     ]
+    },
+    {
+     "block": "minecraft:air",
+     "pos": [
+      6,
+      1,
+      19
+     ]
+    },
+    {
+     "block": "minecraft:air",
+     "pos": [
+      6,
+      1,
+      17
+     ]
+    }
+   ],
+   "moves": [],
+   "posts": [
+    [
+     6,
+     2,
+     18
+    ]
+   ],
+   "template": "heraldia:medianas/embarcadero_shulker/medias/a",
+   "versions": [
+    "c8b9a66",
+    "db7efb3",
+    "f5d3e21"
+   ]
+  }
+ ],
+ "what": "the Wharf Guard's post (a full block: a shulker cannot hold a wall)"
+}

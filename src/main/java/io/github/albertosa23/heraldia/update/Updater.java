@@ -279,7 +279,8 @@ public final class Updater {
 						.then(Commands.literal("confirm").then(Commands.argument("id", com.mojang.brigadier.arguments.StringArgumentType.word())
 								.executes(Updater::confirmUndo))))
 				.then(Commands.literal("repair").executes(c -> repair(c, false))
-						.then(Commands.literal("dry-run").executes(c -> repair(c, true))));
+						.then(Commands.literal("dry-run").executes(c -> repair(c, true))))
+				.then(GenerationMend.node());
 	}
 
 	private static Map<String, String> language(CommandSourceStack src) {
@@ -413,6 +414,7 @@ public final class Updater {
 
 	private static void tick(MinecraftServer server) {
 		Execution.tick(server);
+		GenerationMend.tick(server);
 		if (stop > 0 && --stop == 0) {
 			stop = -1;
 			LOGGER.warn("Heraldia: update apply: se para el servidor; vuelve a arrancarlo a mano para hacer el trabajo");
