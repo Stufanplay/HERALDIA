@@ -1,0 +1,105 @@
+# Design pass, phase 4, first step: a village's streets and its plaza
+
+The diagnosis (1.3, point 4): "streets and plazas are bare. A street piece is a strip of path; the plaza is a ring of
+path round a fountain with four trees."
+
+| | |
+|---|---|
+| The plaza in three styles (plains, desert, snow): before (top), after (bottom) | ![plaza](phase4/01_plaza_before_after.png) |
+| An avenue leaving the plaza, in a world: before (left), after (right) | ![street](phase4/02_street_before_after.png) |
+
+- **Streets.** A kerb along both edges: the style's second paving and, in runs of three, its stone. Flush with the
+  ground: nothing to step over, and a crossing has none. Beside the lamps, four things one block wide: a bench, a
+  woodpile, a bale of hay, a milestone. None is a container, a light or anything a villager takes for a workstation.
+- **Light.** Lamps keep 7 parts in 13 of a street's decoration slots, as before: the new things took the place of
+  empty slots and of one of the planter's two. A street is as lit as it was.
+- **Plaza.** Same size, same fountain, same four avenues, and every position the village's welcome decorations use
+  left as it was. New: a step of the style's stone round the fountain; the lines of the four avenues drawn in the paving
+  up to it; in each corner a bed of the style's flowers under a tree with a real crown (4 or 5 blocks of trunk, a 5 x 5
+  crown). A style whose plants only live in a pot, or prick (cactus, bamboo, sweet berries), gets a dead bush or a fern
+  in its beds.
+
+What the pictures show honestly: the plaza is visibly richer; the kerb is discreet (it reads close up, hardly at the
+scale of a whole village); the street's things are single blocks and the woodpile and the hay are the plainest of them.
+The second picture is of a village placed by command, which does not fit the terrain: it is there for the street, not
+for how the village sits.
+
+In new chunks a village of the same style and seed is laid out differently (other houses in other places), as with
+every change to a village's pieces. A village already generated stays as it is.
+
+Only blocks: no entity and no block entity added; 144 small templates more (four per style).
+
+## Cost
+
+Generating (`generation_cost.py`, two rounds, `develop` then this branch and the other way round, one machine):
+
+| | `develop` | this branch |
+|---|---|---|
+| overhead against vanilla (reference +9.3 %, limit +19.7 %) | +9.0 %, -1.0 % | +9.2 %, +7.0 % |
+| chunks over 50 ms, without → with the mod (limit +6 points) | +1.2, +0.2 points | +1.9, +0.1 points |
+| worst stretch, ms per chunk | 52, 57 | 51, 58 |
+| tick time p99 while generating (limit 50 ms) | 2.9, 10.6 ms | 10.2, 7.8 ms |
+
+No signal: on every row one build's two rounds are further apart than the two builds are. The worst chunk with the mod
+is the same one in all four runs (the village's own, 760 to 930 ms, most of it `structure_starts` and `terrain`), on
+`develop` as on this branch.
+
+Villagers' routes (`village_routes.py`, the 8 villages and the 3 hard ones, one run each): the sample moved before
+this change and moves again with it (the limits were measured on 107 villagers; `develop` today places 104, this
+branch 100). No sign that the routes break; with one run a side and different samples, no claim that they are better.
+
+| 8 villages | villagers | moving | commute | asleep | with a bell | same house |
+|---|---|---|---|---|---|---|
+| `develop` | 104 | 93 (+4) | 45 (+3) | 64 (+12) | 79 (+11) | 20 (+0) |
+| this branch, first head, run 1 | 100 | 92 (+7) | 50 (+10) | 65 (+15) | 74 (+9) | 14 (+6) |
+| this branch, first head, run 2 | 100 | 90 (+5) | 46 (+6) | 64 (+14) | 73 (+8) | 15 (+5) |
+| this branch, as it is now | 100 | 88 (+3) | 42 (+2) | 62 (+12) | 73 (+8) | 15 (+5) |
+
+| 3 hard ones | villagers | moving | commute | asleep | with a bell | same house |
+|---|---|---|---|---|---|---|
+| `develop` | 39 | 36 (+2) | 20 (+4) | 26 (+6) | 28 (+2) | 7 (+0) |
+| this branch | 36 | 31 (+0) | 19 (+4) | 22 (+4) | 27 (+3) | 4 (+3) |
+
+(In brackets, the margin over each limit in villagers. No limit is changed.)
+
+Not measured: the cost of generating while a player explores (the scenario for it is being built).
+
+## A mistake CI caught
+
+The first head of this branch made every house of every style a different house. The woodpile drew one number from the
+style's random source, and the decoration is built before the houses from that same source, so everything built after
+it changed: 125 of the 432 house templates carried a filler container on `develop` and 120 did on that head, and the
+house a server test takes as its sample of one (`filler_loot.py`: `taiga_eslava/houses/medium_3`) was no longer one. The
+test was right to fail: a change to the streets has no business changing the houses. The woodpile's choice is now a
+fixed function of the style, a test checks that no street thing draws from the random source, and the built jar was
+compared with `develop`'s file by file: 144 new templates, 324 changed (144 avenues, 108 streets, 72 plazas), every
+house and every special building identical. The generation cost above and the first two route runs were measured on
+the first head (other houses); the last route row and the server tests are of the branch as it is.
+
+# Second step: the chapel that twelve styles shared
+
+![chapels](phase4/03_chapels_before_after.png)
+
+Three of the twelve styles (woodcutters, straw savanna, fortified dark forest), the two variants that had a tower:
+before on top, after below.
+
+The diagnosis: "eight of the twelve churches are one template in eight colours." The chapel was the most shared of all
+(12 of the 36 styles): a bell tower before a nave, or at its head. The bell is now carried three ways, by the family
+of the style:
+
+| carrier | styles | what it is |
+|---|---|---|
+| bellcote | forest, taiga, coast, swamp (5 styles) | no tower: a porch before the door and the bell in an opening over a gable (the facade's in one variant, the chancel's in the other) |
+| frame | savanna, jungle (4 styles) | no tower: the bell hangs in the open from a timber frame as tall as the ridge, beside the porch |
+| stub | dark forest, badlands (3 styles) | a squat tower that just clears the ridge, battlemented, the bell in its openings, no way up |
+
+**What it costs, said plainly.** Nine of those twelve styles lose the tall tower that was their village's landmark
+from afar; only the squat tower keeps something of it. And the chapel's body is still the same nave in all twelve.
+Whether a village should rather keep a tall tower (without its ladder) is a matter of taste, the owner's: it is one
+line to change per family.
+
+No ladder is left in any chapel. The tower's ran from the floor to the belfry; a villager climbs a ladder by walking
+into it and cannot plan the way down. (Measured elsewhere on a server: the low loft is the case that bites, the tall
+tower's ladder did not show up; so this is the cheap precaution, not the fix of a measured fault.)
+
+What changed in the built mod (`tools/jar_diff.py`, `develop` against this branch): see the pull request.

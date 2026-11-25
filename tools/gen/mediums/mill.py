@@ -109,6 +109,9 @@ def water(p, name):
     t.set(X1 - 1, 1, Z0 + 1, "hay_block[axis=y]")
     t.set(X1 - 1, 2, Z0 + 1, "hay_block[axis=y]")
     t.set(X1 - 2, 1, Z0 + 1, "hay_block[axis=y]")
+    # a back door in the south wall, by the bed: with the north door alone a miller coming home from the south stopped
+    # against this wall 24.4 blocks' walk from his bed (mediums/_paths.trap_walk), 0.6 under the limit
+    c.door(t, DOOR_COL, 1, Z1, "north", f"{m}_door")
     c.bed(t, X0 + 1, Z1 - 1, "west", p["cama"])
     c.place_chest(t, X0 + 1, 1, Z1 - 3, "east", MID, "molinero")
     t.set(X0 + 1, 1, Z0 + 1, "crafting_table")
@@ -159,6 +162,8 @@ def wind(p, name):
                 t.set(x, y, z, p["cumbrera"])
     c.door(t, CX, 1, Z0, "south", f"{m}_door")
     c.ladder(t, X0 + 1, Z1 - 1, 1, 9, "north")               # against the south wall; passes through both floors
+    # its foot shut behind a fence gate: a miller who climbed it had no way down (mediums/_paths.stranded)
+    c.ladder_closet(t, X0 + 1, 1, Z1 - 1, m, p["tronco"], {(0, -1): "gate", (1, 0): "post"})
     for y in (2, 7, 11):
         c.window(t, X0, y, 8)
         c.window(t, X1, y, 8)

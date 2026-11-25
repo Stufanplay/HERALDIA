@@ -60,7 +60,18 @@ CONFIG_LOG = [
 # With 12 cells (the 4 touching 0,0 and their 8 cross neighbours, of 94 chunks), every village ends up within 2 x 94 x 16 blocks.
 LOCATE_LIMIT = 2 * 94 * 16
 DOWNLOAD_ATTEMPTS = 4         # a download cut off by the network (seen with Fabric API) is repeated
-ERROR_PATTERN = r"Unknown|Incorrect|Failed|Invalid|error|not loaded"
+# Incomplete in both directions, and knowing which matters when writing an `ok` pattern: a success text holding one
+# of these words ends the wait too soon (see LESSONS), and an error text holding none of them does not end it at all --
+# `data get entity` with a selector that could match more than one answers `Only one entity is allowed, but the
+# provided selector allows more than one`, so the wait ran its full COMMAND_TIMEOUT_S. Measured on a dedicated server.
+# `errors?\b(?!=)` and not a bare `error`: the word has to stand on its own. A bare `error` matched `error=null` inside
+# the Mojang profile lookup the server logs for every Carpet fake player -- so `run` handed that log line back as the
+# reply to a `player <name> spawn` that had worked -- and it also matched a test's own success line ("sin errores de
+# los mapas web en el log"), which is the hazard the older lesson warns about, happening unnoticed. Measured over the
+# whole battery (64,101 log lines): with the bare word, 13 lines matched it and none of the others, all of them that
+# same Mojang noise; with this pattern, 0. It still has to match `Registry loading errors`, a real 26.3 failure, which
+# is why the word is not simply removed and why `error:` would have been wrong.
+ERROR_PATTERN = r"Unknown|Incorrect|Failed|Invalid|errors?\b(?!=)|not loaded"
 # /heraldia info nearby: (point, radius); the last one, with the maximum radius, measures the worst case. The search runs off the
 # server thread; on it only the confirmation (INFO_MAIN_MS at most). INFO_MAX_MS is the cap for the full response.
 INFO_POINTS = [((0, 0), None), ((6000, 0), 6000), ((0, -6000), 10000)]
@@ -191,7 +202,10 @@ def pending(lines, seen):
 
 def run(proc, lines, seen, cmd, ok):
     """Sends a command and returns the first success or error reply. First discards (to `seen`) whatever was left in the
-    queue: the line from more than one earlier command (e.g. two "Test passed") is not taken as this one's reply."""
+    queue: the line from more than one earlier command (e.g. two "Test passed") is not taken as this one's reply.
+
+    It returns with the **error** reply too, and raises nothing: a caller that does not look at what came back accepts
+    any failure of its command and carries on as if it had worked. Where the command has to have worked, use `must`."""
     pending(lines, seen)
     send(proc, cmd)
     end = time.monotonic() + COMMAND_TIMEOUT_S
@@ -203,6 +217,18 @@ def run(proc, lines, seen, cmd, ok):
         if "]: Heraldia: " in m.string and not re.search(ok, m.string):
             continue
         return m
+
+
+def must(proc, lines, seen, cmd, ok):
+    """`run`, with the reply asserted: raises SystemExit unless the line that came back holds the success reply `ok`.
+
+    Taking the words of the failure out of an `ok` pattern is not enough on its own -- `run` ORs in `ERROR_PATTERN`
+    anyway, so the wait still ends on the error reply and still returns it. Someone has to look at it. A pattern passed
+    here must therefore not match the failure either, or there is nothing left to tell apart."""
+    m = run(proc, lines, seen, cmd, ok)
+    if not re.search(ok, m.string):
+        raise SystemExit(f"{cmd}: the server replied {m.string.strip()!r}")
+    return m
 
 
 # Condition waits of the server tests: the check is repeated for up to UNTIL_S seconds (generous: CI is
@@ -266,6 +292,10 @@ class Context:
     def run(self, cmd, ok):
         return run(self.proc, self.lines, self.seen, cmd, ok)
 
+    def must(self, cmd, ok):
+        """`run`, failing if the reply is not the success reply (see `must`)."""
+        return must(self.proc, self.lines, self.seen, cmd, ok)
+
     def log(self):
         return "".join(self.seen)
 
@@ -328,6 +358,93 @@ class Context:
         keep = [f for f in _top_tokens(inner.replace(",", " ")) if f.split("=")[0] in ("type", "tag")]
         wide = f"@e[{','.join(keep)}]"
         return f"{wide}: {self.count(wide)} en el mundo, la primera en {self.pos(wide)}"
+
+
+# Standing a player where a test then builds at it.
+# Waiting for the state to be ready is not the same as checking that it is the state you asked for: `OnGround` turns
+# true wherever the entity happens to land, so a bot that drops a block first is "settled" at the wrong place and what
+# is built at it comes out one block off (it cost a confound in #137: the town at ground 90 instead of 91, once in nine
+# runs). Hence both halves below -- `OnGround`, which is a property of the entity, and the position, which is a
+# property of the world -- and the aimed spot taken from the teleport's own reply, which the game writes inside the
+# teleport before any tick can move anything, instead of a second read that the fall can get in front of.
+# Measured on a dedicated server, 26.3: a teleport answers `Teleported <Bot> to 0.500000, 63.000000, 48.500000`
+# (integer x and z in a position argument are centred on the block, y is not) and `That position is not loaded` while
+# the column is still loading. Do NOT read the aimed spot from a marker or armor stand summoned there instead: in a
+# chunk that is not loaded yet the summon answers `Summoned new Marker` and the entity then does not exist at all
+# (`@e` finds nothing, `data get` says `No entity was found`) -- which is how this was found.
+SURFACE = "positioned over motion_blocking_no_leaves"    # the heightmap a test stands something on
+SETTLE_S = 30
+_FLAG = r"has the following entity data: (\d)b|No entity was found"
+_TELEPORTED = r"Teleported .+? to (-?[\d.]+), (-?[\d.]+), (-?[\d.]+)|No entity|not loaded"
+
+
+def _one(who):
+    """`who` as a selector for exactly **one** entity.
+
+    Two traps, both measured on a dedicated server: a bare player name cannot take the `[limit=1]` that `Context.pos`
+    appends (`data get entity rep[limit=1]` never answers), and `data get entity` refuses at parse time a selector that
+    could match more than one -- with `Only one entity is allowed, but the provided selector allows more than one`,
+    which holds none of `ERROR_PATTERN`'s words, so the test waits the full `COMMAND_TIMEOUT_S` for it."""
+    if not who.startswith("@"):
+        return f"@a[name={who},limit=1]"
+    if "limit=" in who:
+        return who
+    return who[:-1] + ",limit=1]" if who.endswith("]") else who + "[limit=1]"
+
+
+def on_ground(ctx, who):
+    """Is `who` resting on a block? The game's own answer (entity NBT `OnGround`). A whole-number Y is no proof of it
+    and a fractional one is no proof against: a player rests at y 69.9375 on a path block, measured on a server."""
+    return ctx.run(f"data get entity {_one(who)} OnGround", _FLAG).group(1) == "1"
+
+
+def _resting(at, want):
+    """Is `at` (a read `Pos`) standing where the teleport aimed, `want` (the destination it reported)?
+
+    The aimed y is a **feet level**: a teleport leaves the entity with its feet there. So the column has to be the same
+    one and the feet have to be inside that single block of height. Not `floor(y)` equal: a block shorter than a full
+    cube holds the feet just below the level (measured on a dedicated server, a player resting on a path block sits at
+    y 69.9375, floor 69, aimed 70), and that is resting, not falling. A whole block down -- the fault this guards
+    against -- fails either way."""
+    return (at is not None and (math.floor(at[0]), math.floor(at[2])) == (math.floor(want[0]), math.floor(want[2]))
+            and want[1] - 1 < at[1] <= want[1])
+
+
+def _settle(ctx, who, tp, where, timeout):
+    """Repeats the teleport `tp` until `who` is resting where it reported aiming. Returns that spot's block."""
+    end, want, at, m = time.monotonic() + timeout, None, None, None
+    while True:
+        m = ctx.run(tp, _TELEPORTED)
+        if m.group(1):                      # it did teleport, and the reply says where
+            want = tuple(float(v) for v in m.groups())
+            ctx.ticks(2)                    # let gravity have its say before believing the answer
+            at = ctx.pos(_one(who))
+            if _resting(at, want) and on_ground(ctx, who):
+                return tuple(math.floor(v) for v in want)
+        if time.monotonic() > end:
+            raise SystemExit(f"the player did not settle at {where}: {who} is at {at}, aimed at {want}, last reply "
+                             f"{m.string.strip()[-120:]!r}")
+        time.sleep(POLL_S)
+
+
+def land(ctx, who, x, z, timeout=SETTLE_S):
+    """Puts `who` on the **surface** of the column (x, z) and does not return until it is resting there. Returns that
+    spot's block as (x, y, z); also waits out a column that is not loaded yet.
+
+    For a test that builds at wherever the ground happens to be. Where the test picked the height itself, use `stand`.
+    Raises SystemExit naming the spot it never settled at."""
+    return _settle(ctx, who, f"execute positioned {x} 320 {z} {SURFACE} run tp {who} ~ ~ ~",
+                   f"the surface of ({x}, {z})", timeout)
+
+
+def stand(ctx, who, x, y, z, timeout=SETTLE_S):
+    """Puts `who` on the block (x, y, z) that the **caller** chose, and does not return until it is resting there.
+    Returns (x, y, z).
+
+    For a test that picked the height for its own reasons -- `herald_steep.py` hovers its bot 21 blocks over the
+    natural ground, because the town levels its own footprint -- so the surface is not what it is aiming for. Something
+    has to hold the entity up there, or it falls and this fails. Raises SystemExit naming the block."""
+    return _settle(ctx, who, f"tp {who} {x} {y} {z}", f"({x}, {y}, {z})", timeout)
 
 
 def unique_hook(sid):
@@ -565,7 +682,7 @@ def main():
         send(proc, FORCELOAD)
         wait_for(lines, r"Marked|Added|chunks? .*force", COMMAND_TIMEOUT_S, seen)
         for _ in range(PLACE_ATTEMPTS):
-            m = run(proc, lines, seen, f"place structure {PLACE_TARGET} 0 ~ 0", r"Generated structure")
+            m = run(proc, lines, seen, f"place structure {PLACE_TARGET} 0 ~ 0", r"Generated structure|not loaded(?! yet)")
             if "not loaded" not in m.group(0):
                 break
             time.sleep(PLACE_RETRY_S)   # the forced chunks load in the following ticks

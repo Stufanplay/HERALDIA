@@ -256,7 +256,7 @@ def check_place_without_board(srv, fails, style, x, z):
         fails.append(f"/place of {style}: the zone never loads")
         return
     for _ in range(s.PLACE_ATTEMPTS):
-        m = srv.run(f"place structure heraldia:{style} {x} ~ {z}", r"Generated structure")
+        m = srv.run(f"place structure heraldia:{style} {x} ~ {z}", r"Generated structure|not loaded(?! yet)")
         if "not loaded" not in m.group(0):
             break
         time.sleep(s.PLACE_RETRY_S)

@@ -342,7 +342,9 @@ class Pass:
             raise SystemExit(f"the pass {'with' if with_it else 'without'} Heraldia {'did not load' if with_it else 'loaded'} it")
         c = self.ctx
         for rule, v in (("advance_time", "false"), ("advance_weather", "false"), ("keep_inventory", "true")):
-            c.run(f"gamerule {rule} {v}", rf"[Gg]ame ?rule|Unknown|Incorrect")
+            # `must`, and no failure words in the pattern: these three rules keep a 60 s measurement from depending on
+            # the time of day or the weather, so a `gamerule` that did not take has to stop the run, not be waited on.
+            c.must(f"gamerule {rule} {v}", rf"[Gg]ame ?rule .*{rule}.*{v}")
         s.send(c.proc, f"time set {TIME_OF_DAY}")      # neither answers if nothing changes (on the restart)
         s.send(c.proc, "weather clear")
         c.run("time query gametime", r"[Tt]ime is \d+")
@@ -410,7 +412,17 @@ class Pass:
         s.send(c.proc, f"gamemode {mode} {name}")          # no reply if it already is in that mode
         if not c.until(f"execute if entity @a[name={name},gamemode={mode}]", timeout=30):
             raise SystemExit(f"{name} is not in {mode} mode")
-        c.run(f"execute positioned {x} 320 {z} positioned over motion_blocking_no_leaves run tp {name} ~ ~ ~", r"Teleported|No entity")
+        # the player has just logged in 200 blocks up: its column may not be loaded for a moment yet, and then there is
+        # no ground to be put on ("That position is not loaded"). Left up there, it is in no village, and what the
+        # scenario starts next has nobody to start for
+        for _ in range(60):
+            m = c.run(f"execute positioned {x} 320 {z} positioned over motion_blocking_no_leaves run tp {name} ~ ~ ~",
+                      r"Teleported|No entity|not loaded")
+            if "not loaded" not in m.string:            # the whole reply, not only the part of it that matched
+                break
+            time.sleep(0.5)
+        else:
+            raise SystemExit(f"{name}: the column at {x} {z} did not load in 30 s")
         if mode == "survival":
             for e in ("resistance", "saturation"):      # "Unable": it still has it from an earlier scenario (saved player data)
                 c.run(f"effect give {name} minecraft:{e} infinite 255 true", r"Applied effect|Gave|Unable")
@@ -547,6 +559,10 @@ class Pass:
         c = self.ctx
         if not hasattr(self, "_house"):
             self.player(PLAYERS[0], x, z)
+            # `player` puts it on the surface but does not check that it stayed there, and `place here` builds at the
+            # bot's block: one tick of gravity first and the house that is then measured is one block off (see
+            # `server_smoke.land`). This is the one scenario whose figures depend on where the house landed.
+            s.land(c, PLAYERS[0], x, z)
             c.run(f"op {PLAYERS[0]}", r"Made .* operator|already|Nothing changed")
             # its reply goes to the player's chat, which a Carpet bot's does not reach the console (see LESSONS)
             s.send(c.proc, f"execute as {PLAYERS[0]} at @s run heraldia herald place here")

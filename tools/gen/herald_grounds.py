@@ -55,10 +55,11 @@ POI = ("_bed", "bell", "barrel", "composter", "loom", "lectern", "cauldron", "sm
 
 
 # ------------------------------------------------------------------ building blocks
-def _house(name, width, depth, wall, corner, roof, gable, floor, door_x, loot_table):
+def _house(name, width, depth, wall, corner, roof, gable, floor, door_x, loot_table, kind="x"):
     """A house: local x across its front (the roof's side overhang at x 0 and width - 1), local z from the front of the
     yard (z 0 .. YARD - 1) to the back wall (depth - 1); y 0 is the ground layer, the floor; the walls rise to y 3 and a
-    gable roof (its ridge along x) above. The door, in the front wall (z = YARD) at x = door_x, opens to local north."""
+    roof above: `kind` "x" a gable with its ridge along x, "z" a gable whose end faces the yard, "hip", or "flat" (a
+    terrace behind a parapet). The door, in the front wall (z = YARD) at x = door_x, opens to local north."""
     t = Template(TEMPLATE_PREFIX + name)
     zf, zb = YARD, depth - 1
     x0, x1 = 1, width - 2
@@ -77,7 +78,50 @@ def _house(name, width, depth, wall, corner, roof, gable, floor, door_x, loot_ta
             post = x in (x0, x1) and z in (zf, zb)
             for y in (1, 2, 3):
                 t.set(x, y, z, corner if post else wall)
-    for k in range((rows + 1) // 2):                    # the gable roof: one row of stairs up per row in
+    st = lambda facing: f"{roof}[facing={facing},half=bottom,shape=straight,waterlogged=false]"
+    slab = roof.replace("_stairs", "_slab") + "[type=bottom,waterlogged=false]"
+    if kind == "z":                                     # a gable whose end faces the yard: the eaves over each side
+        top = 4 + (width + 1) // 2
+        for y in range(top + 1):
+            for x in range(width):
+                for z in range(depth):
+                    if t.get(x, y, z) is None:
+                        t.set(x, y, z, "air")
+        for k in range((width + 1) // 2):
+            y, lo, hi = 4 + k, k, width - 1 - k
+            for z in range(zf, zb + 1):
+                if lo == hi:
+                    t.set(lo, y, z, slab)
+                    continue
+                t.set(lo, y, z, st("east"))
+                t.set(hi, y, z, st("west"))
+            for z in (zf, zb):                          # the gable ends under that row
+                for x in range(max(lo + 1, x0), min(hi, x1 + 1)):
+                    t.set(x, y, z, gable)
+        for z in range(zf, zb + 1):                     # the wall plate under the eaves
+            for x in (x0, x1):
+                t.set(x, 4, z, wall)
+    elif kind == "hip":
+        for k in range(max(width, rows)):
+            a, b_, c, d = k, width - 1 - k, zf + k, zb - k
+            if a > b_ or c > d:
+                break
+            for x in range(a, b_ + 1):
+                for z in range(c, d + 1):
+                    if x in (a, b_) or z in (c, d):
+                        t.set(x, 4 + k, z, slab if c == d or a == b_ else
+                              st("south" if z == c else "north" if z == d else "east" if x == a else "west"))
+    elif kind == "flat":                                # a terrace: the roof's block behind a low parapet, beams out front
+        for x in range(x0, x1 + 1):
+            for z in range(zf, zb + 1):
+                edge = x in (x0, x1) or z in (zf, zb)
+                t.set(x, 4, z, wall if edge else gable)
+                if edge and ((x + z) % 2 == 0 or (x in (x0, x1) and z in (zf, zb))):
+                    t.set(x, 5, z, slab)
+        for x in range(x0 + 1, x1, 2):
+            if x != door_x:
+                t.set(x, 3, zf - 1, "stripped_crimson_stem[axis=z]")
+    for k in range((rows + 1) // 2 if kind == "x" else 0):   # the gable roof: one row of stairs up per row in
         y = 4 + k
         for x in range(width):
             front, back = zf + k, zb - k
@@ -99,6 +143,7 @@ def _house(name, width, depth, wall, corner, roof, gable, floor, door_x, loot_ta
     t.set(door_x, 2, zf, "crimson_door[facing=north,half=upper,hinge=left,open=false,powered=false]")
     for z in range(YARD):                               # the path from the door to the front of the yard
         t.set(door_x, 0, z, "dirt_path")
+    top = max(y for (x, y, z), (bst, _) in t.blocks.items() if bst != "minecraft:air")
     t.min_size = (width, top + 1, depth)
     t.door = (door_x, 1, zf)
     t.loot = loot_table
@@ -133,6 +178,13 @@ def cherry_cottage():
     """White and pink, a granite roof: the house that goes with the cherry trees."""
     t = _house("casita_cerezo", 9, 10, "white_terracotta", "stripped_crimson_stem[axis=y]", "granite_stairs",
                "pink_terracotta", "crimson_planks", 4, filler_loot.table_id("casa"))
+    # a porch either side of the door: a post and a granite cover each. The door's own column stays under the open sky:
+    # the door rule only checks a door whose way out it can see (doors.template_report skips one under a cover)
+    for x in (2, 6):
+        t.set(x, 1, YARD - 1, "crimson_fence")
+        t.set(x, 2, YARD - 1, "crimson_fence")
+    for x in (2, 3, 5, 6):
+        t.set(x, 3, YARD - 1, "granite_slab[type=bottom,waterlogged=false]")
     _windows(t, [(2, 2, 3), (6, 2, 3), (1, 2, 6), (7, 2, 6), (4, 2, 9)])
     _flowers(t, [(1, 1), (2, 1), (6, 1), (7, 1)], ["pink_tulip", "allium", "pink_tulip", "lily_of_the_valley"])
     t.chest(6, 1, 8, "north", t.loot)
@@ -149,6 +201,16 @@ def brick_house():
     """Brick walls, a dark tiled roof and a chimney: the widest house."""
     t = _house("casa_ladrillo", 11, 10, "bricks", "stone_bricks", "deepslate_tile_stairs", "bricks",
                "polished_andesite", 5, filler_loot.table_id("despensa"))
+    # a dormer over the door: two posts and a pane on the slope, its own little gable
+    tile = "deepslate_tile_stairs[facing={},half=bottom,shape=straight,waterlogged=false]"
+    for x in (4, 6):
+        t.set(x, 6, YARD + 1, "stone_bricks")
+    t.set(5, 6, YARD + 1, "glass_pane[east=true,west=true]")
+    for z in (YARD + 1, YARD + 2):
+        t.set(4, 7, z, tile.format("east"))
+        t.set(6, 7, z, tile.format("west"))
+        t.set(5, 8, z, "deepslate_tile_slab[type=bottom,waterlogged=false]")
+    t.set(5, 7, YARD + 1, "bricks")
     _windows(t, [(2, 2, 3), (3, 2, 3), (7, 2, 3), (8, 2, 3), (1, 2, 6), (9, 2, 6)])
     for y in range(1, 9):                               # the chimney (no fire: only its stack)
         t.set(8, y, 9, "bricks")
@@ -167,7 +229,7 @@ def brick_house():
 def stone_house():
     """Stone bricks gone mossy, a blackstone roof, candles on the sill: the old house."""
     t = _house("casa_piedra", 9, 10, "mossy_stone_bricks", "polished_andesite", "polished_blackstone_brick_stairs",
-               "stone_bricks", "stone_bricks", 4, filler_loot.table_id("granja"))
+               "stone_bricks", "stone_bricks", 4, filler_loot.table_id("granja"), kind="hip")
     _windows(t, [(2, 2, 3), (6, 2, 3), (1, 2, 7), (7, 2, 7)], "iron_bars")
     t.chest(2, 1, 8, "north", t.loot)
     t.set(6, 1, 8, "crafting_table")
@@ -184,7 +246,7 @@ def stone_house():
 def mud_house():
     """Mud brick walls and roof, a waxed copper lantern: the warm one."""
     t = _house("casa_barro", 10, 9, "mud_bricks", "packed_mud", "mud_brick_stairs", "packed_mud", "packed_mud", 5,
-               filler_loot.table_id("molino"))
+               filler_loot.table_id("molino"), kind="flat")
     _windows(t, [(3, 2, 3), (7, 2, 3), (1, 2, 6), (8, 2, 6)])
     t.chest(7, 1, 7, "north", t.loot)
     t.set(2, 1, 7, "furnace[facing=north,lit=false]")
@@ -199,7 +261,7 @@ def mud_house():
 def tuff_house():
     """Tuff bricks, a polished tuff roof, a bench in the yard: the reading house."""
     t = _house("casa_toba", 9, 11, "tuff_bricks", "chiseled_tuff_bricks", "polished_tuff_stairs", "polished_tuff",
-               "polished_tuff", 4, filler_loot.table_id("estudio"))
+               "polished_tuff", 4, filler_loot.table_id("estudio"), kind="z")
     _windows(t, [(2, 2, 3), (6, 2, 3), (1, 2, 7), (7, 2, 7), (4, 2, 10)])
     t.chest(6, 1, 9, "north", t.loot)
     t.set(2, 1, 9, "crafting_table")

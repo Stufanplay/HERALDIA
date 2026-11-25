@@ -26,8 +26,10 @@ import argparse, fnmatch, glob, json, os, shutil, subprocess, sys, time
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SMOKE = "tools/smoke/server_smoke.py"
 FULL = "*"            # in the map: the change affects everything (common code) -> full suite
-NOT_TESTS = {"server_smoke.py", "modrinth.py", "generation_cost.py", "runtime_cost.py", "wayfarers.py"}  # common modules, the cost
-# ones (their own jobs) and the wayfarers' scenario, which runs inside caravans.py (same server and corridor)
+NOT_TESTS = {"server_smoke.py", "modrinth.py", "generation_cost.py", "runtime_cost.py", "wayfarers.py",
+             "saved_world.py"}  # common modules, the cost
+# ones (their own jobs) and the wayfarers' scenario, which runs inside caravans.py (same server and corridor);
+# saved_world.py reads a saved world's region files for village_routes.py (a helper: no --jar, no server of its own)
 # Compatibility with other mods (one test per group, with Modrinth mods): long and with downloads, so in a PR
 # it only runs if the test itself, the mod list or the common placement code changes (what decides where each
 # structure appears and whether it clashes with those of other mods). In the full suite (push to develop, workflow_dispatch, label) always.
@@ -142,7 +144,7 @@ MEND = ["tools/smoke/mend.py"]
 MAP = [
     # no server tests: documentation, unit tests, client, changelog
     ("docs/*", []), ("*.md", []), ("tools/gen/tests/*", []), ("src/test/*", []), ("src/client/*", []),
-    ("tools/changelog.py", []), ("tools/gen/render.py", []), ("tools/gen/look.py", []), ("tools/gen/README.md", []), (".gitignore", []),
+    ("tools/changelog.py", []), ("tools/unchecked_replies.py", []), ("tools/gen/render.py", []), ("tools/gen/look.py", []), ("tools/gen/README.md", []), (".gitignore", []),
     # the play cost: its own CI job (RUNTIME_PATHS), no server group
     (RUNTIME, []), ("tools/smoke/TickSampler.java", []), ("tools/smoke/runtime_reference.json", []),
     # villages: piece generator and its Java
@@ -159,6 +161,9 @@ MAP = [
     ("tools/gen/dimensions.py", NETHER_END + MEDIUMS), (JAVA + "dimensions/*", NETHER_END),
     ("tools/gen/uniques/_enclosure.py", NETHER_END + OF_EVERY_UNIQUE),
     ("tools/gen/mediums/wizard_hut.py", MEDIUMS_MOBS + HUTS),
+    # the model of the villager path search: the mediums' contract and village_routes' "shut in" figure
+    ("tools/gen/mediums/_paths.py", MEDIUMS_MOBS + NETHER_END + ["tools/smoke/village_routes.py"]),
+    ("tools/smoke/saved_world.py", ["tools/smoke/village_routes.py"]),
     ("tools/gen/mediums/*", MEDIUMS_MOBS + NETHER_END), (JAVA + "common/MediumStructures.java", MEDIUMS + NETHER_END),
     # inhabitants of the medium structures: their option, applied when each one first loads
     (JAVA + "inhabitants/*", MEDIUMS),
@@ -257,6 +262,9 @@ MAP = [
     (JAVA + "herald/Outskirts*.java", HERALD_GROUNDS + SPAWN_ROADS + HERALD_STEEP), ("tools/gen/herald_grounds.py", HERALD_GROUNDS + SPAWN_ROADS),
     # the town's build (its shores) and the shores' own code: the town placed by the arena's test too
     (JAVA + "herald/Shores.java", HERALD_STEEP + HERALD_GROUNDS), (JAVA + "herald/Building.java", HERALD_STEEP + HERALD_GROUNDS + ["tools/smoke/arena.py"]),
+    # how our builds put a template into the world (no block of it waterlogged by the water already there): the town, its
+    # grounds' houses and the huts of its roads
+    (JAVA + "common/Placing.java", HERALD_STEEP + HERALD_GROUNDS + SPAWN_ROADS + ["tools/smoke/arena.py"]),
     (JAVA + "roads/*", ["tools/smoke/roads.py"]), ("tools/gen/roads.py", ["tools/smoke/roads.py"]),
     # common code: full suite
     ("tools/gen/uniques/_common/*", FULL), ("tools/gen/uniques/__init__.py", FULL), ("tools/gen/writer.py", FULL),

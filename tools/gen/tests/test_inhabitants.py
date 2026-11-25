@@ -186,3 +186,114 @@ def test_a_step_against_a_fence_is_a_trap(reg):
             t.blocks[p] = ("minecraft:air", None)
             t.blocks[(p[0], p[1], p[2] + 1)] = (st, None)        # back against the fence, as it was
     assert any("hops over" in e for e in inh.issues(t))
+
+
+def _walled(t, door_xz, wall_xz):
+    """A copy of the template with the door at door_xz (y 1 and 2) bricked up with the wall block at wall_xz."""
+    import core
+    w = core.Template(t.name + "#walled")
+    w.blocks = dict(t.blocks)
+    wall = t.blocks[(wall_xz[0], 1, wall_xz[1])]
+    w.blocks[(door_xz[0], 1, door_xz[1])] = w.blocks[(door_xz[0], 2, door_xz[1])] = wall
+    w.jigsaws, w.entities = t.jigsaws, t.entities
+    return w
+
+
+def test_no_inhabitant_is_trapped_behind_its_bedroom_wall(reg):
+    """Every inhabited template passes the trap check (mediums/_paths.trap_walk), and the two templates seen failing on a
+    server fail it again with their bedroom door bricked up: the inn without its back door (traps 26.1 and 36.1 blocks'
+    walk from the beds; 7 villagers in 16 did not get home) and the hermitage without its cell door (31.8; 5 in 8)."""
+    from mediums import _paths, hermitage, inn
+    seen = 0
+    for name, t in reg.templates.items():
+        if name.startswith("medianas/") and any(inh.is_inhabitant(n) for *_, n in t.entities):
+            seen += 1
+            assert inh.trap_issues(t) == [], name
+    assert seen == 28
+    t = reg.templates["medianas/posada/llanura/a"]
+    old = _walled(t, (inn.X1, 8), (inn.X1, 7))
+    assert sorted(w for _, _, w in _paths.trap_walk(old)) == [26.1, 36.1]
+    assert len(inh.trap_issues(old)) == 2 and inh.issues(old) != []
+    t = reg.templates["medianas/ermita/oscuro/a"]
+    old = _walled(t, (hermitage.X1 - 2, hermitage.Z1), (hermitage.X1 - 3, hermitage.Z1))
+    assert [w for _, _, w in _paths.trap_walk(old)] == [31.8]
+    assert len(inh.trap_issues(old)) == 1
+
+
+def test_a_trap_is_where_the_search_stops_short(reg):
+    """The model of the 26.3 search: a walk of 16 or more is never found (the hard limit), a shorter one is; the partial
+    path of a failed search ends at the explored cell closest to the bed in a straight line."""
+    import core
+    from mediums import _paths
+    t = core.Template("wall")
+    for z in range(-6, 7):
+        for y in (0, 1, 2):
+            t.set(5, y, z, "stone")               # a wall at x = 5 from z -6 to 6, ground of the platform under it
+    t.set(0, 0, 0, "stone")
+    g = _paths.Ground(t)
+    ok, end = _paths.find_path(g, (3, 0, 0), (8, 0, 0))   # 5 blocks across, some 17 round the end of the wall
+    assert not ok and end == (4, 0, 0)
+    ok, _ = _paths.find_path(g, (3, 0, 6), (8, 0, 6))      # near the end of the wall: a short way round
+    assert ok
+
+
+def test_no_inhabitant_is_stranded_up_a_ladder(reg):
+    """No inhabited template lets a villager climb a ladder to where its search has no way back (mediums/_paths.stranded),
+    and the three seen or found stranding fail it again as they were: the hunters' lookout a block higher (a drop of 4:
+    both inhabitants stranded on it in CI; 6 of 12 left on top got home on a server, 12 of 12 with it lower), and the
+    windmill's and the watchtower's ladders with their foot open."""
+    import core
+    from mediums import _paths
+    seen = 0
+    for name, t in reg.templates.items():
+        if name.startswith("medianas/") and any(inh.is_inhabitant(n) for *_, n in t.entities):
+            seen += 1
+            assert inh.stranded_issues(t) == [], name
+    assert seen == 28
+
+    def edited(t, changes):
+        w = core.Template(t.name + "#old")
+        w.blocks = dict(t.blocks)
+        for p, st in changes.items():
+            if st is None:
+                w.blocks.pop(p, None)
+            else:
+                w.blocks[p] = (st, None)
+        w.jigsaws, w.entities = t.jigsaws, t.entities
+        return w
+
+    t = reg.templates["medianas/cazadores/sabana/a"]
+    # the old lookout: everything from y = 1 up one block higher (x 10..12, z 1..4), the ladder to y = 4
+    old = {}
+    for (x, y, z), (st, _) in t.blocks.items():
+        if 10 <= x <= 12 and 1 <= z <= 4 and y >= 1:
+            old[(x, y, z)] = None
+    for (x, y, z), (st, _) in t.blocks.items():
+        if 10 <= x <= 12 and 1 <= z <= 4 and y >= 1:
+            old[(x, y + 1, z)] = st
+    for (x, z) in ((10, 1), (12, 1), (10, 3), (12, 3), (11, 4)):
+        old[(x, 1, z)] = t.blocks[(x, 1, z)][0]
+    old[(11, 1, 3)] = t.blocks[(11, 1, 3)][0]
+    lookout = edited(t, old)
+    assert _paths.stranded(lookout) and inh.issues(lookout) != []
+    for name, gate, posts in (("medianas/molino/llanura/b", (4, 1, 9), [(5, 1, 10), (5, 2, 10)]),
+                              ("medianas/torre_vigia/taiga/b", (7, 1, 9), [(6, 1, 10), (6, 2, 10), (8, 1, 10), (8, 2, 10)])):
+        t = reg.templates[name]
+        assert t.blocks[gate][0].split("[")[0].endswith("_fence_gate"), name
+        opened = edited(t, {p: None for p in [gate] + posts})
+        assert _paths.stranded(opened), name
+
+
+def test_the_watermill_has_no_trap(reg):
+    """The watermill's house (mill a) gets a back door by the miller's bed: with the north door alone a miller coming home
+    from the south stopped against that wall 24.4 blocks' walk from his bed, 0.6 under mediums/_paths.TRAP_WALK_MAX (on a
+    server he still got home, 24 of 24, before and after; the door is for the margin). With it there is no trap: from
+    that cell the bed is 5 blocks' walk, within one search."""
+    from mediums import _paths
+    for style in ("llanura", "pantano"):
+        t = reg.templates[f"medianas/molino/{style}/a"]
+        assert [w for _, _, w in _paths.trap_walk(t)] == [0.0], style
+    t = reg.templates["medianas/molino/llanura/a"]
+    g = _paths.Ground(t)
+    assert round(_paths.walks(g, (4, 1, 12))[(4, 1, 14)], 1) == 5.0
+    assert _paths.find_path(g, (4, 1, 14), (4, 1, 12))[0]

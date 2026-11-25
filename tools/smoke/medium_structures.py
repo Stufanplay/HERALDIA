@@ -175,12 +175,35 @@ def check_settled(ctx, mid, px, pz, long_stay=False):
     fails = []
     if job < n or home < n or slept < n:
         fails.append(f"{mid} at {px}, {pz}: of {n} inhabitants, {job} took a workstation, {home} a bed and {slept} slept")
+        diagnose_settled(ctx, sel, n)
     if long_stay:
         fails += check_stay(ctx, mid, px, pz, sel, n, with_mem)
     return fails
 
 
-STAY_TICKS = 3 * 24000                # three more in-game days with /tick sprint, from one nightfall to another
+_HOME = r"entity data: \[I; (-?\d+), (-?\d+), (-?\d+)\]|Found no elements|No entity was found|not found"
+
+
+def diagnose_settled(ctx, sel, n):
+    """On a settle failure, where each inhabitant is and which bed it remembers (none: it never claimed one or gave it
+    up), so that a red run says whether it was stuck outside a wall (docs/LESSONS.md, "Pending bugs": the hunters'
+    lodge failed twice in CI and could not be reproduced)."""
+    for k in range(n):
+        one = f"{sel[:-1]},tag=!heraldia_diag,limit=1]"
+        ctx.run(f"tag {one} add heraldia_diag{k}", r"Added tag|Could not|No entity")
+        ctx.run(f"tag @e[tag=heraldia_diag{k}] add heraldia_diag", r"Added tag|Could not|No entity")
+        me = f"@e[tag=heraldia_diag{k},limit=1]"
+        name = ctx.run(f"data get entity {me} VillagerData.profession", r"entity data: \"([^\"]+)\"|No entity|not found")
+        home = ctx.run(f"data get entity {me} Brain.memories.\"minecraft:home\".value.pos", _HOME)
+        job = ctx.run(f"data get entity {me} Brain.memories.\"minecraft:job_site\".value.pos", _HOME)
+        print(f"DIAG inhabitant {name.group(1) if name.lastindex and name.group(1) else '?'} at {ctx.pos(me)}: home "
+              f"{home.group(1, 2, 3) if home.group(1) else None}, workstation {job.group(1, 2, 3) if job.group(1) else None}")
+    for k in range(n):
+        ctx.run(f"tag @e[tag=heraldia_diag{k}] remove heraldia_diag{k}", r"Removed tag|Could not|No entity")
+    ctx.run("tag @e[tag=heraldia_diag] remove heraldia_diag", r"Removed tag|Could not|No entity")
+
+
+STAY_TICKS = 3 * 24000               # three more in-game days with /tick sprint, from one nightfall to another
 
 
 def wait_loaded(ctx, px, pz, r, timeout=180):
@@ -339,7 +362,7 @@ def check_structures(ctx):
             forceload(ctx, x - 8, z - 8, x + 47, z + 47)
             for _ in range(s.PLACE_ATTEMPTS):
                 t0 = time.monotonic()
-                m = ctx.run(f"place structure heraldia:medianas/{mid}/{style} {x} ~ {z}", r"Generated structure")
+                m = ctx.run(f"place structure heraldia:medianas/{mid}/{style} {x} ~ {z}", r"Generated structure|not loaded(?! yet)")
                 timings[f"{mid}/{style}"] = time.monotonic() - t0
                 if "not loaded" not in m.group(0):
                     break

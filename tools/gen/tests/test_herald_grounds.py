@@ -152,3 +152,17 @@ def test_texts():
     assert l["es_es"].keys() == l["en_us"].keys()
     assert all(k.startswith("heraldia.casa_heraldo.alrededores.") for k in l["es_es"])
     assert h.N == g.N
+
+
+def test_no_two_houses_share_a_roof():
+    """Five houses, five roofs (a gable with a porch, one with a dormer and a chimney, a hip, a terrace behind a parapet,
+    a gable end to the yard): the highest block of every column, relative to the house's own walls, differs."""
+    shapes = set()
+    for name, t in g.templates().items():
+        x0, z0, x1, z1 = t.walls
+        top = {}
+        for (x, y, z), (st, _) in t.blocks.items():
+            if st != "minecraft:air" and x0 <= x <= x1 and z0 <= z <= z1:
+                top[(x - x0, z - z0)] = max(top.get((x - x0, z - z0), 0), y)
+        shapes.add(tuple(top.get((i, j), 0) for i in range(7) for j in range(6)))
+    assert len(shapes) == len(g.templates())

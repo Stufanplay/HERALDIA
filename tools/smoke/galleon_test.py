@@ -32,7 +32,7 @@ def main():
         s.send(proc, f"forceload add {x - 120} {z - 120} {x + 119} {z + 119}")
         s.wait_for(lines, r"Marked|Added|force", s.COMMAND_TIMEOUT_S, seen)
         for _ in range(s.PLACE_ATTEMPTS):
-            m = s.run(proc, lines, seen, f"place structure heraldia:unicas/galeon {x} ~ {z}", r"Generated structure")
+            m = s.run(proc, lines, seen, f"place structure heraldia:unicas/galeon {x} ~ {z}", r"Generated structure|not loaded(?! yet)")
             if "not loaded" not in m.group(0):
                 break
             import time; time.sleep(s.PLACE_RETRY_S)

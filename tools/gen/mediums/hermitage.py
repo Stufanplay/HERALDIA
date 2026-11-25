@@ -90,6 +90,10 @@ def _chapel(p, name):
     t.set(CX, 3, 10, p["muro"])
     c.door(t, X1 - 1, 1, 10, "south", f"{m}_door")
     t.set(X1 - 1, 1, 9, "air")
+    # The cell's own door, in the south wall. With the north door alone a hermit coming home from the south stopped
+    # against this wall, his bed two blocks away through it and some thirty on foot round the chapel: a villager's
+    # search never finds a path of 16 blocks or more (26.3), and on a server he did not get home 5 times in 8.
+    c.door(t, X1 - 2, 1, Z1, "north", f"{m}_door")
     c.bed(t, X0 + 1, 12, "west", p["cama"])
     c.place_chest(t, X1 - 1, 1, 12, "west", MID, "celda")
     t.set(CX, 1, 12, "lectern[facing=north,has_book=false,powered=false]")

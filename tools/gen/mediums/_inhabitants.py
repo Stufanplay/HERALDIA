@@ -127,11 +127,9 @@ def _fence_traps(t, cells):
 
 def worst_walk(t, straight=16):
     """(steps, cell, bed): the longest walk to a bed's side from a walkable cell of the template within `straight` blocks
-    of that bed in a straight line. A REPORT, not a contract (tools/gen/inhabitant_walks.py prints it for every template):
-    the game only claims a bed whose path fits its search (26.3: nodes within 16 blocks, 256 of them), and a bed a few
-    blocks away through a wall with the door at the far end is not claimed (the Roadside Inn's innkeeper, Nov 2026). No
-    limit is set on this figure: a long walk over open ground is found; what number of steps through doors is not, is
-    not measured yet."""
+    of that bed in a straight line. For reference only (tools/gen/inhabitant_walks.py prints it): it does not tell a
+    template that fails from one that does not (the mill at 43 got home 8 times in 8, the hermitage at 41 only 3 in 8).
+    The check is trap_issues (mediums/_paths): the walk from where a villager coming home stops against a wall."""
     import collections
     import math
     import lint
@@ -155,6 +153,28 @@ def worst_walk(t, straight=16):
             if d > worst[0] and math.hypot(c[0] - b[0], c[2] - b[2]) <= straight:
                 worst = (d, c, b)
     return worst
+
+
+def trap_issues(t):
+    """A bed whose trap (mediums/_paths: where a villager coming home stops against a wall, the bed behind it) is more
+    than _paths.TRAP_WALK_MAX blocks' walk from the bed: on a server the villager failed to get home from there."""
+    from . import _paths
+    return [f"bed at {bed}: a villager coming home stops at {trap}, against a wall, {walk} blocks' walk from it (maximum "
+            f"{_paths.TRAP_WALK_MAX}); its search never finds a walk of {int(_paths.FOLLOW_RANGE)} or more: give the "
+            f"bed's room a door on that side"
+            for bed, trap, walk in _paths.trap_walk(t) if walk > _paths.TRAP_WALK_MAX]
+
+
+def stranded_issues(t):
+    """Cells an inhabitant can climb a ladder to and has no way back from (mediums/_paths.stranded)."""
+    from . import _paths
+    found = _paths.stranded(t)
+    if not found:
+        return []
+    cell, (x, z, y0, y1) = found[0]
+    return [f"{len(found)} cells (e.g. {cell}) an inhabitant gets to by climbing the ladder at x {x}, z {z} (y {y0}-{y1}) "
+            f"and has no way back to its bed from (its search never uses ladders and drops 3 blocks at most): lower the "
+            f"top to a drop of 3, or shut the ladder's foot behind a fence gate (_common.ladder_closet)"]
 
 
 def issues(t):
@@ -185,6 +205,8 @@ def issues(t):
         errs.append(f"{len(reach_beds)} reachable beds for {len(living)} villagers: a free bed lets them breed")
     bells = [q for q, (st, _) in t.blocks.items() if _name(st) == "bell" and _beside(cells, *q)]
     errs += _fence_traps(t, cells)
+    errs += trap_issues(t)
+    errs += stranded_issues(t)
     used_jobs = set()
     for p, n in living:
         prof = n["VillagerData"]["profession"].split(":")[1]

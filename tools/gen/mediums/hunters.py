@@ -124,19 +124,22 @@ def _outpost(p, name, lit):
 
 
 def _lookout(t, p, x0, z0):
-    """Hunting lookout: 3 x 3 platform at y = 4 on four posts, with its ladder (against a post to the
-    south) and a lantern at each corner of the railing."""
+    """Hunting lookout: 3 x 3 platform at y = 3 on four posts, with its ladder (against a post to the
+    south) and a lantern at each corner of the railing. No higher: a villager walks into the ladder and climbs it, and
+    its path search never uses ladders, so from the top it gets down only by a drop of 3 at most. With the platform at
+    y = 4 (a drop of 4) the hunters' lodge's two inhabitants ended up stranded up there in CI, without bed or
+    workstation (mediums/_paths.stranded)."""
     m, tr = p["madera"], p["tronco"]
     for x in (x0, x0 + 2):
         for z in (z0, z0 + 2):
-            t.fill(x, 1, z, x, 3, z, f"{tr}[axis=y]")
-    t.fill(x0, 4, z0, x0 + 2, 4, z0 + 2, f"{m}_planks")
-    t.fill(x0 + 1, 1, z0 + 3, x0 + 1, 4, z0 + 3, f"{tr}[axis=y]")
-    c.ladder(t, x0 + 1, z0 + 2, 1, 4, "north")
+            t.fill(x, 1, z, x, 2, z, f"{tr}[axis=y]")
+    t.fill(x0, 3, z0, x0 + 2, 3, z0 + 2, f"{m}_planks")
+    t.fill(x0 + 1, 1, z0 + 3, x0 + 1, 3, z0 + 3, f"{tr}[axis=y]")
+    c.ladder(t, x0 + 1, z0 + 2, 1, 3, "north")
     for x, z in ((x0, z0), (x0 + 2, z0), (x0, z0 + 2), (x0 + 2, z0 + 2)):
-        t.set(x, 5, z, f"{m}_fence")
-    c.lantern(t, x0, 6, z0, hanging=False)
-    c.lantern(t, x0 + 2, 6, z0, hanging=False)
+        t.set(x, 4, z, f"{m}_fence")
+    c.lantern(t, x0, 5, z0, hanging=False)
+    c.lantern(t, x0 + 2, 5, z0, hanging=False)
 
 
 def with_hunter(p, name):

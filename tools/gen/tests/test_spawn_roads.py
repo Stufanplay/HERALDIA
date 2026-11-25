@@ -241,3 +241,31 @@ def test_the_texts_in_every_language():
         for k in base["es_es"]:
             assert k in t, (code, k)
     assert s.text_errors({c: languages.load_data(c) for c in languages.TRANSLATIONS}) == []
+
+
+def test_the_door_rule_is_really_checked_on_each_hut():
+    """A block in front of a hut's door breaks the rule: no porch cover hides the door from the check (a door under a
+    cover on its way out is skipped by doors.template_report, so a hut's porch stays open over its door)."""
+    for name, t in s.templates().items():
+        x, y, z = s.DOOR
+        assert doors.template_report(t) == [], name
+        t.set(x, 1, z - 2, "cobblestone")
+        t.set(x, 2, z - 2, "cobblestone")
+        assert doors.template_report(t), name
+
+
+def test_no_two_huts_are_the_same_building():
+    """Each hut has its own silhouette (the height of every column) and its own walls: eight buildings, not one cube
+    with eight awnings. What the Java side places by position (door, bed, workstation, bell) is the same in all."""
+    ts = s.templates()
+    def skyline(t):
+        top = {}
+        for (x, y, z), (st, _) in t.blocks.items():
+            if st != "minecraft:air" and "wool" not in st and "lantern" not in st:
+                top[(x, z)] = max(top.get((x, z), 0), y)
+        return tuple(sorted(top.items()))
+    walls = {n: t.get(2, 3, s.HUT_SIZE[2] - 1) for n, t in ts.items()}
+    assert len(set(walls.values())) == len(ts), walls
+    assert len({skyline(t) for t in ts.values()}) >= 6
+    for n, t in ts.items():
+        assert "_door" in t.get(*s.DOOR) and "bell" in t.get(*s.BELL) and "_bed" in t.get(*s.BED[0]), n
