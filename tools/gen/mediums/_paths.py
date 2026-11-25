@@ -52,7 +52,9 @@ class Ground:
         if n.endswith("_door"):
             return n == "iron_door"
         if self.lint.passable(st):
-            return n.endswith("_fence_gate") and "open=false" in st
+            # a gate is shut unless it says open=true: a 26.3 region palette writes an all-default state as a bare
+            # id, so a closed gate read back from a saved world carries no "open=false" (23 of 98 in a measured one)
+            return n.endswith("_fence_gate") and "open=true" not in st
         return True
 
     def floor(self, x, y, z):
@@ -70,7 +72,7 @@ class Ground:
         f = self.b.get((x, y, z))
         n = _name(f)
         if n and (n.endswith(("_fence", "_wall", "_leaves", "_pane")) or n == "iron_bars"
-                  or n.endswith("_fence_gate") and "open=false" in f):
+                  or n.endswith("_fence_gate") and "open=true" not in f):
             return None
         if f is not None and self.solid(f):
             h = top_height(f)

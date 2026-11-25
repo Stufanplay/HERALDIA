@@ -81,7 +81,7 @@ def _no_ladders(t):
         n = _name(st)
         if n == "ladder":
             return ("minecraft:air", None)
-        if n.endswith("_fence_gate") and "open=false" in st:
+        if n.endswith("_fence_gate") and "open=true" not in st:      # shut unless it says open (see _paths.solid)
             return ("minecraft:" + n.replace("_fence_gate", "_fence"), None)
         return (st, nbt)
     u = Template(t.name + "#aldeano")
