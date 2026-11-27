@@ -75,6 +75,7 @@ SURFACE_TP = "positioned over motion_blocking_no_leaves run tp"
 # not accept: `not loaded` stays in `ok` because the retry needs it back, so the check below still has to reject it,
 # and `No entity` too.
 _TP_REPLIES = r"Teleported|No entity|not loaded"
+ONFLOOR_TICKS = 200           # how long a player teleported into an unloaded column is given for it to load (10 s of game)
 
 
 def on_floor(ctx, sel, x, z):
@@ -94,12 +95,23 @@ def on_floor(ctx, sel, x, z):
 
     Deliberately minimal: the path that works today is untouched (same command, same coordinates), the retry only
     happens where the test used to do nothing at all, and nothing here waits for the entity to settle -- that would
-    change what is observed, not just whether it is checked."""
+    change what is observed, not just whether it is checked. What the retry does wait for is the player's own column
+    to load, which is a precondition of the teleport and not part of what is observed."""
     cmd = f"execute positioned {x} 300 {z} {SURFACE_TP} {sel} ~ ~ ~"
     m = ctx.run(cmd, _TP_REPLIES)
     if "not loaded" in m.string and not sel.startswith("@"):      # a player loads its own column; an entity cannot
         ctx.run(f"tp {sel} {x} 300 {z}", r"Teleported|No entity")
-        m = ctx.run(cmd, _TP_REPLIES)
+        # The player's arrival loads the column, but not by the next command on a loaded runner: in CI the retry
+        # straight after the absolute `tp` still answered `not loaded` (#155, Servidor · caravans + quests), and it
+        # did locally with several servers sharing the machine. So the retry waits for it, a few ticks at a time and
+        # for at most ONFLOOR_TICKS -- game ticks, not seconds, so a slow server gets the same chance as a fast one.
+        for waited in range(0, ONFLOOR_TICKS + 1, 10):
+            m = ctx.run(cmd, _TP_REPLIES)
+            if "not loaded" not in m.string:
+                break
+            ctx.ticks(10)
+        print(f"on_floor: {sel}'s column at ({x}, {z}) {'loaded' if 'not loaded' not in m.string else 'still not loaded'}"
+              f" after the absolute tp and {waited} ticks")
     if "Teleported" not in m.string:
         raise SystemExit(f"on_floor: {sel} did not reach the surface of ({x}, {z}): {m.string.strip()[-120:]}")
 
