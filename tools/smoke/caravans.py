@@ -39,6 +39,7 @@ DEPARTS = re.compile(r"sale la caravana (\d+) de (.+?) hacia (.+?): (\d+) vérti
                   r"hasta (-?\d+) (-?\d+), asalto (no|en el vértice \d+), (\d) llamas, (con|sin) guardia")
 VERTICES = re.compile(r"vértices de la caravana (\d+): (.*)")
 NO_ROAD = r"There is no Heraldia road|No hay ningún camino"
+NO_RAID = r"There is no caravan on the road that can be ambushed|No hay ninguna caravana en camino que se pueda asaltar"
 ITEM_LIST = re.compile(r"waypoint (\d+) of (\d+)|vértice (\d+) de (\d+)")
 SEGMENT = (0.3, 0.7)          # central part of the route that is generated (the spawn looks 80 blocks from the player)
 
@@ -152,7 +153,15 @@ def state(ctx, pattern):
 
 
 def defended(ctx, fails, route):
-    c = new_one(ctx, fails, route, "raid")
+    # `peaceful`, not `raid`: this caravan's ambush is the one forced below, and it must be the only one possible.
+    # `spawn raid` plans an ambush at a vertex towards the middle of the segment, and on the corridor this test uses the
+    # merchant is already at vertex 3 when the raid is forced (measured: the forced bandits appear at -1310 -435, vertex
+    # 3 is -1309 -436). When the plan says vertex 3 the two ambushes race, and when the planned one wins the forced raid
+    # is refused and the caravan ends on the ambush timeout, three minutes later (CI, Nov 2026). `caravanas.prob_asalto
+    # = 0` would not have helped: it only applies when no mode is given, `raid` forces the plan regardless. With
+    # `peaceful` the journey has no planned vertex, so only `/heraldia caravan raid` can start an ambush. `spawn raid`
+    # itself is checked in `lost`.
+    c = new_one(ctx, fails, route, "peaceful")
     if c is None:
         return
     if ctx.count(f"@e[tag={MERCHANT}]") != 1:
@@ -161,8 +170,8 @@ def defended(ctx, fails, route):
         fails.append(f"caravana {c['id']}: {ctx.count(f'@e[tag={FLAME}]')} llamas (dice {c['llamas']})")
     if ctx.count(f"@e[tag={SENTRY}]") != (1 if c["guardia"] else 0):
         fails.append(f"caravan {c['id']}: guard count does not match")
-    if c["asalto"] == "no":
-        fails.append("spawn raid: the caravan appears with no ambush planned")
+    if c["asalto"] != "no":
+        raise SystemExit(f"spawn peaceful: caravan {c['id']} plans an ambush ({c['asalto']}), so it can race the forced one")
     # advances along the road: it gets closer to the end
     finish = c["vertices"][-1]
     p0 = ctx.pos(f"@e[tag={MERCHANT}]")
@@ -175,15 +184,23 @@ def defended(ctx, fails, route):
     line = state(ctx, r"(?:Caravans on the road|Caravanas en camino): (\d+)")
     if line is None or line.group(1) != "1":
         fails.append(f"/heraldia status does not count the caravan on the road: {line and line.group(0)}")
-    # asalto forzado
-    m = as_player(ctx, "heraldia caravan raid", r"asalto a la caravana (\d+): (\d+) bandidos")
-    n = int(m.group(2))
+    # forced ambush. Both replies are listed so the wait ends promptly on either (the refusal holds none of
+    # ERROR_PATTERN's words: left out, the wait ran its full COMMAND_TIMEOUT_S), and only the ambush is accepted.
+    # The ambush line is anchored on this caravan's id so that no other ambush can stand in for it. A refusal stops the
+    # test here and says so: appended to `fails`, it was printed only at the end, or never, when a later step raised.
+    m = as_player(ctx, "heraldia caravan raid", rf"asalto a la caravana {c['id']}: (\d+) bandidos|{NO_RAID}")
+    if not m.group(1):
+        raise SystemExit(f"/heraldia caravan raid did not ambush caravan {c['id']}: {m.string.strip()[-90:]}")
+    n = int(m.group(1))
     print(f"asalto: {n} bandidos")
     if not 2 <= n <= 4:
         fails.append(f"ambush with {n} bandits (should be 2 to 4)")
     if ctx.count(f"@e[tag={BANDIT},tag=heraldia_anclado]") != n:
         fails.append("the bandits do not have the tags of the anchored mobs (and of the difficulty)")
-    as_player(ctx, "heraldia caravan raid", r"no caravan on the road that can be ambushed|ninguna caravana en camino que se pueda asaltar")
+    # a second raid on the same caravan is refused: the same three-way wait, the other way round
+    m = as_player(ctx, "heraldia caravan raid", rf"asalto a la caravana (\d+): \d+ bandidos|{NO_RAID}")
+    if m.group(1):
+        fails.append(f"a second /heraldia caravan raid ambushed caravan {m.group(1)} again")
     mark = len(ctx.seen)
     ctx.run(f"execute as @e[tag={BANDIT}] run damage @s 1000 minecraft:player_attack by {PLAYER}", r"Applied|damage|No entity")
     wait(ctx, rf"la caravana {c['id']} supera el asalto", mark)
@@ -223,9 +240,14 @@ def defended(ctx, fails, route):
 
 
 def lost(ctx, fails, route):
-    c = new_one(ctx, fails, route, "peaceful")
+    # `raid`, so that `spawn raid` is still checked to plan an ambush (see `defended`). Here the plan cannot race
+    # anything: the merchant is killed at the start of the segment, and an ambush that did come first would not change
+    # how a caravan with a dead merchant ends, nor leave anything behind (bandits are removed with the rest).
+    c = new_one(ctx, fails, route, "raid")
     if c is None:
         return
+    if c["asalto"] == "no":
+        fails.append("spawn raid: the caravan appears with no ambush planned")
     p = ctx.pos(f"@e[tag={MERCHANT}]")
     before = len(re.findall(r" cobra \d+ esmeraldas", ctx.log()))
     mark = len(ctx.seen)
