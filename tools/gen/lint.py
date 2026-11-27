@@ -336,6 +336,9 @@ def template_issues(t, kind=None):
         if ladders.is_village(kind):
             # a village ladder a villager can climb from the ground, and the closet that shuts its foot
             iss += ladders.issues(t)
+            # a villager placed behind a shut fence gate, which it never opens (the farms, the cloister library)
+            import enclosures
+            iss += enclosures.issues(t)
     return iss
 
 
