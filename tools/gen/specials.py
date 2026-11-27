@@ -1694,7 +1694,9 @@ def library_variant(th, rng, name, v):
                 t.set(x, y, z, "air")
         t.set(x, 1, zf, th["fence"])
     t.set(cx, 0, zf, th["path"])
-    t.set(cx, 1, zf, f"{th['gate']}[facing=north,open=false]")
+    # the gate stands open: the court is the library's only way in, the librarian is placed in the hall behind it, and
+    # villagers never open a gate (shut, it kept the librarian inside for good: tools/gen/enclosures.py)
+    t.set(cx, 1, zf, f"{th['gate']}[facing=north,open=true]")
     for z in range(zf + 1, zm):
         t.set(cx, 0, z, th["path"])
     for z in (zf + 2, zf + 5):
@@ -1747,8 +1749,11 @@ def farm(th, rng, name, v=0):
     # central path from door to door (the back one leads to the mill)
     for z in range(1, D + 1):
         t.set(cx, 0, z, th["path"])
-    t.set(cx, 1, 1, f"{th['gate']}[facing=north,open=false]")
-    t.set(cx, 1, D, f"{th['gate']}[facing=north,open=false]")
+    # the two gates of the outer fence stand open: the farmer is placed in the barn inside it and sleeps in a house of
+    # the village, and villagers never open a gate (shut, he never left the farm: tools/gen/enclosures.py). The pen
+    # keeps its own gate shut, for the animals.
+    t.set(cx, 1, 1, f"{th['gate']}[facing=north,open=true]")
+    t.set(cx, 1, D, f"{th['gate']}[facing=north,open=true]")
     t.jigsaw(cx, 0, D, "south_up", "heraldia:side", "heraldia:entrance", P(th, "mill"),
              final_state=th["path"], sel=6, place=6)
     # two terraced plots with a central irrigation ditch
@@ -1861,8 +1866,9 @@ def farm_variant(th, rng, name, v):
             t.set(x, 1, z, th["fence"])
     for z in range(1, D + 1):
         t.set(cx, 0, z, th["path"])
-    t.set(cx, 1, 1, f"{th['gate']}[facing=north,open=false]")
-    t.set(cx, 1, D, f"{th['gate']}[facing=north,open=false]")
+    # open, as in farm(): the farmer has to walk out (tools/gen/enclosures.py); the pen's gate stays shut
+    t.set(cx, 1, 1, f"{th['gate']}[facing=north,open=true]")
+    t.set(cx, 1, D, f"{th['gate']}[facing=north,open=true]")
     t.jigsaw(cx, 0, D, "south_up", "heraldia:side", "heraldia:entrance", P(th, "mill"),
              final_state=th["path"], sel=6, place=6)
     crops = ["wheat", "carrots", "potatoes", "beetroots"]
