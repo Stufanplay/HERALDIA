@@ -260,11 +260,54 @@ def lost(ctx, fails, route):
     if m.group(1) != "perdida":
         fails.append(f"when the merchant is killed the caravan ends as '{m.group(1)}' (it should be lost)")
     if floor:
-        fails.append(f"when the caravan is lost, {floor} items remain on the ground (no exploitation loot)")
+        fails.append(f"when the caravan is lost, {floor} items remain on the ground (no exploitation loot): "
+                     + "; ".join(ground_items(ctx, p, floor)))
     if ctx.count(f"@e[tag={TAG}]"):
         fails.append("when lost, caravan entities remain")
     if len(re.findall(r" cobra \d+ esmeraldas", ctx.log())) != before:
         fails.append("a lost caravan has paid out")
+
+
+def _fields(snbt, names):
+    """`name: value` for each of `names` found at the top level of an entity's SNBT, the value taken whole (balanced
+    brackets), so a long `Item` with components does not push `Thrower` out of a truncated message."""
+    out = []
+    for name in names:
+        i = snbt.find(f"{name}: ")
+        if i < 0:
+            continue
+        j = k = i + len(name) + 2
+        depth = 0
+        while k < len(snbt):
+            ch = snbt[k]
+            if ch in "{[":
+                depth += 1
+            elif ch in "}]":
+                if depth == 0:
+                    break
+                depth -= 1
+            elif ch == "," and depth == 0:
+                break
+            k += 1
+        out.append(f"{name}: {snbt[j:k]}")
+    return ", ".join(out) or snbt.strip()[:400]
+
+
+def ground_items(ctx, p, n, radius=24):
+    """What the items on the ground near `p` are, not just how many: each one's `Item`, where it lies, its `Age` and,
+    when the game records it, who dropped it (`Thrower`), so that a red names what was left behind. Seen
+    once in a full local pass (1 of 71 tests, 3 of 3 green on repeating it) as a bare "1 items remain", with nothing to
+    tell what it was. Each item read is tagged so the next read takes another one."""
+    seen_tag, out = "caravans_leido", []
+    for _ in range(min(n, 5)):
+        sel = (f"@e[type=minecraft:item,x={p[0]:.0f},y={p[1]:.0f},z={p[2]:.0f},distance=..{radius},"
+               f"tag=!{seen_tag},sort=nearest,limit=1]")
+        m = ctx.run(f"data get entity {sel}", r"has the following entity data: (.*)|No entity was found")
+        if not m.group(1):
+            break
+        out.append(_fields(m.group(1), ("Item", "Pos", "Thrower", "Age")))
+        ctx.run(f"tag {sel} add {seen_tag}", r"Added tag|No entity was found")
+    return out or ["(none could be read)"]
 
 
 def far(ctx, fails, route):

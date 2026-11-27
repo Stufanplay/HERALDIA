@@ -9,8 +9,8 @@ exactly that:
         if "not loaded" not in m.string:        # <- read out of ERROR_PATTERN, not out of `ok`
             break
 
-That retry works only while `run` is lenient. The moment `run` fails by default -- which is where
-this harness is going -- such a branch becomes dead code and the test dies on a slow chunk instead
+That retry works only while `run` is lenient. Once `run` fails by default -- which is where
+this harness is now -- such a branch becomes dead code and the test dies on a slow chunk instead
 of retrying. It would not die in the pass that turned the switch on: the branch is only taken when a
 column happens not to be loaded, which a measured full pass hit in 2 of 17 sites. That is the worst
 shape a change can have, so the invariant is checked statically instead of being left to a battery
