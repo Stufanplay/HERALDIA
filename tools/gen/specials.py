@@ -698,6 +698,28 @@ WALLS = {"cobblestone": "cobblestone_wall", "stone_bricks": "stone_brick_wall", 
          "cut_sandstone": "sandstone_wall", "mossy_cobblestone": "mossy_cobblestone_wall"}
 
 
+def ringed(t):
+    """The cemetery with a ring of bare ground a block wide outside its wall on the three sides away from its gate.
+    Its wall is 1.5 high and the game's path search walks on a wall's top: from anything a block high against it on the
+    outside (a neighbour's hay bale, barrel, plinth, a trace's floor) the top is a step up, and from inside it is
+    out of reach. Villagers got in that way and stayed (docs/LESSONS.md, "A villager gets into a walled cemetery").
+    With the ring nothing of a neighbour's is next to the wall: from the ring's ground the top is 1.5 up. Its gate
+    stays shut, as the owner chose (nobody is placed inside)."""
+    x0, y0, z0, x1, y1, z1 = t.bounds()
+    t.blocks = {(x + 1, y, z): v for (x, y, z), v in t.blocks.items()}
+    t.entities = [(x + 1, y, z, n) for x, y, z, n in t.entities]
+    for jg in t.jigsaws:
+        x, y, z = jg["pos"]
+        jg["pos"] = (x + 1, y, z)
+    for x in range(x0, x1 + 3):
+        for z in range(z0 + 1, z1 + 2):
+            if x in (x0, x1 + 2) or z == z1 + 1:
+                t.set(x, 0, z, "coarse_dirt")
+                for y in (1, 2, 3):
+                    t.set(x, y, z, "air")
+    return t
+
+
 def cemetery(th, rng, name, v=0):
     """v: 0 graves on the sides of the path and mausoleum at the back (the original); 1 hedge, crossing paths with a stone cross
     in the middle, cypresses and a crypt in a corner; 2 rows of graves and a chapel of souls across the width of the back."""
@@ -832,7 +854,7 @@ def cemetery(th, rng, name, v=0):
         # yew next to the door
         for x in (c - 2, c + 2):
             t.set(x, 0, kz0 - 1, th["path"])
-    return t
+    return ringed(t)
 
 
 # ======================================================================= AYUNTAMIENTO
