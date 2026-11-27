@@ -71,8 +71,9 @@ def as_player(ctx, cmd, ok):
 SURFACE_TP = "positioned over motion_blocking_no_leaves run tp"
 # The three replies this teleport can give. All three are listed so the wait ends promptly on each, and only the first
 # is accepted afterwards: `No entity was found` is NOT in `ERROR_PATTERN`, so leaving it out of `ok` would make the wait
-# run its full COMMAND_TIMEOUT_S (300 s) instead of failing. When `run()` fails by default, the `not loaded` half of
-# the check below becomes redundant and can go; the `No entity` half may NOT, for that same reason.
+# run its full COMMAND_TIMEOUT_S (300 s) instead of failing. `run()` now fails by default, but only on a reply `ok` does
+# not accept: `not loaded` stays in `ok` because the retry needs it back, so the check below still has to reject it,
+# and `No entity` too.
 _TP_REPLIES = r"Teleported|No entity|not loaded"
 
 
