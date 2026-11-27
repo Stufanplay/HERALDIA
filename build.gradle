@@ -18,6 +18,10 @@ def fetchRegistries = tasks.register('fetchRegistries', Exec) {
 	def target = mcmetaDir.get()
 	def branch = project.mcmeta_summary_branch
 	onlyIf { !new File(target, 'registries/data.json').isFile() }
+	// `clean build`: the clone lives in build/, which clean deletes, and this task declares no outputs, so nothing else
+	// orders it after clean. With parallel builds its onlyIf was read before clean ran (the clone still there: skipped)
+	// and generateStructures then found no registries. After clean, the check sees what clean left.
+	mustRunAfter tasks.named('clean')
 	commandLine 'git', '-c', 'advice.detachedHead=false', 'clone', '--quiet', '--depth', '1', '--branch', branch,
 			'https://github.com/misode/mcmeta.git', target.absolutePath
 }
