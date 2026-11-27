@@ -387,3 +387,15 @@ def test_aquatic_dry():
     assert AQUATIC not in pick(J + "mines/Hillside.java")[1]
     assert AQUATIC not in pick("tools/gen/uniques/castle/__init__.py")[1]
     assert sel.DURATION_S[AQUATIC] > 0
+
+
+def test_the_cost_jobs_say_why_they_run_or_not():
+    """The reason CI prints for each cost job names the files that decided it, and says so when none did."""
+    assert sel.why([], sel.COST_PATHS, "COST_PATHS", True).startswith("full suite")
+    r = sel.why(["docs/CONTENT.md", "tools/smoke/roads.py"], sel.COST_PATHS, "COST_PATHS")
+    assert r.startswith("none of the 2 changed file(s) is in COST_PATHS")
+    r = sel.why(["tools/gen/houses.py", "README.md"], sel.RUNTIME_PATHS, "RUNTIME_PATHS")
+    assert r == "1 changed file(s) in RUNTIME_PATHS: tools/gen/houses.py"
+    assert sel.why(["tools/gen/tests/test_x.py"], sel.COST_PATHS, "COST_PATHS").startswith("none")   # COST_WITHOUT
+    many = [f"tools/gen/f{i}.py" for i in range(7)]
+    assert sel.why(many, sel.COST_PATHS, "COST_PATHS").endswith("(+2 more)")

@@ -370,6 +370,18 @@ def runtime(changed_list):
                for r in changed_list)
 
 
+def why(changed_list, paths, name, full=False):
+    """One line for CI: why the cost job of `paths` (COST_PATHS or RUNTIME_PATHS, without COST_WITHOUT) runs or is skipped,
+    naming the files that decided it (the job's own summary and its check-run annotation carry it)."""
+    if full:
+        return "full suite (push to develop, workflow_dispatch, the bateria-completa label or [bateria completa] in the title)"
+    hit = [r for r in changed_list if any(fnmatch.fnmatch(r, p) for p in paths)
+           and not any(fnmatch.fnmatch(r, p) for p in COST_WITHOUT)]
+    if hit:
+        return f"{len(hit)} changed file(s) in {name}: " + ", ".join(hit[:5]) + (f" (+{len(hit) - 5} more)" if len(hit) > 5 else "")
+    return f"none of the {len(changed_list)} changed file(s) is in {name} (or all are in COST_WITHOUT)"
+
+
 def changed_list(base):
     """Files changed versus `base` (merge-base), plus those of the working tree not yet committed."""
     def git(*a):
@@ -551,7 +563,10 @@ def main(argv=None):
         changes = changed_list(a.base)
         (full, tests), with_cost, with_runtime = choose(changes), cost(changes), runtime(changes)
     if a.ci_matrix:
-        print(json.dumps(dict(matrix(full, tests), full=full, cost=with_cost, runtime=with_runtime), ensure_ascii=False))
+        print(json.dumps(dict(matrix(full, tests), full=full, cost=with_cost, runtime=with_runtime,
+                              cost_reason=why(changes, COST_PATHS, "COST_PATHS", a.all or a.full),
+                              runtime_reason=why(changes, RUNTIME_PATHS, "RUNTIME_PATHS", a.all or a.full)),
+                         ensure_ascii=False))
         return 0
     if a.list_only or a.affected:
         print(f"{len(changes)} ficheros cambiados frente a {a.base}" if changes else "full suite", file=sys.stderr)

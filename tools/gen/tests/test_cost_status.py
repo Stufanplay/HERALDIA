@@ -167,3 +167,31 @@ def test_the_skip_step_and_the_verdict_step_make_one_annotation(tmp_path, capsys
     assert cs.main(["verdict", "--job", "coste", "--output", str(tmp_path), "--step-outcome", "skipped"]) == 0
     lines = capsys.readouterr().out.splitlines()
     assert sum(l.startswith("::notice title=COST-VERDICT") or l.startswith("::error title=COST-VERDICT") for l in lines) == 1
+
+
+def test_a_retry_round_keeps_the_first_rounds_passes_in_the_partial(tmp_path, monkeypatch):
+    """The retry (a second call to measure()) must not overwrite *.parcial.json with its own passes only: a job killed
+    in the retry round keeps the first round. For juego that round does not fit its time limit, by arithmetic (46-47 min
+    measured in CI for one round, ~85 with the retry, against 60); not observed in CI, where no run has retried yet."""
+    _path = list(sys.path)      # tools/smoke only while importing (see test_compat_mods.py)
+    sys.path.insert(0, os.path.join(TOOLS, "smoke"))
+    import generation_cost as g, runtime_cost as rc
+    sys.path[:] = _path
+    (tmp_path / "server.properties").write_text("level-seed=x\n")
+    (tmp_path / "config").mkdir()
+    for m in (g, rc):
+        monkeypatch.setattr(m.s, "prepare", lambda *a: "launcher")
+        monkeypatch.setattr(m.modrinth, "install", lambda *a: None)
+        monkeypatch.setattr(m, "OUTPUT", str(tmp_path))
+    monkeypatch.setattr(g, "_measured", {"sin": [], "con": []})
+    monkeypatch.setattr(g, "sweep", lambda work, jar, with_it, launcher: {"con": with_it, "chunks": 1, "segundos": 1.0})
+    g.measure("jar", str(tmp_path), 3)
+    g.measure("jar", str(tmp_path), 3)
+    p = json.loads((tmp_path / "coste_generacion.parcial.json").read_text())
+    assert (len(p["sin"]), len(p["con"])) == (6, 6)
+    monkeypatch.setattr(rc, "_measured", [])
+    monkeypatch.setattr(rc, "sweep", lambda work, jar, with_it, launcher, pos, s_, w_, e_: ({"escenarios": {}}, pos or {}))
+    rc.measure("jar", str(tmp_path), 1, 60, 30, True)
+    rc.measure("jar", str(tmp_path), 1, 60, 30, False, {})
+    p = json.loads((tmp_path / "coste_juego.parcial.json").read_text())
+    assert [x["con"] for x in p["pasadas"]] == [True, False, True, False]
