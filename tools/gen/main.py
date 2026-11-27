@@ -21,6 +21,7 @@ import wizard_huts
 import filler_loot
 from themes import THEMES
 from lint import lint_registry, summarize
+import compositions
 
 
 def main():
@@ -45,6 +46,9 @@ def main():
         print("ERRORES:", errs, lerrs, reg.warnings[:20])
         return 1
     res = lint_registry(reg)
+    # village pieces side by side: a way into a pen over the join of two of them, that no template shows by itself
+    for name, iss in compositions.issues(reg).items():
+        res.setdefault(name, []).extend(iss)
     if res:
         c, ex = summarize(res)
         print("DESIGN AUDIT:", {k: (n, ex[k]) for k, n in c.items()})
