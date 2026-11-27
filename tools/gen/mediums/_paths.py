@@ -13,7 +13,8 @@ platform (tools/bed_probe.py --ret), a villager taken to the yard at nightfall a
 26 blocks away or more (inn without its back door 26.1: 3 of 8 and 36.1: 4 of 8; hermitage 31.8: 5 of 8) and never from
 24.4 or less (0 of 64 over six templates). The template is modelled standing on flat ground MARGIN blocks around it.
 The walkable cells are a simplified WalkNodeEvaluator: feet in a passable or low (<= 0.6) block, solid ground under,
-1.95 of headroom; steps up of a block (a jump), drops of up to 3; diagonals only past two clear sides and never through
+1.95 of headroom (also on the top of a wall, a fence or a shut gate, as the game's search has it); steps up of a block
+(a jump), drops of up to 3; diagonals only past two clear sides and never through
 a door; wooden doors open, iron doors, closed fence gates, fences, walls, panes and leaves do not; water costs 8."""
 import heapq
 import math
@@ -47,7 +48,11 @@ class Ground:
         if st is None:
             return False
         n = _name(st)
-        if n == "water":
+        if n in ("water", "scaffolding"):
+            # scaffolding is air to the game's search: getPathTypeFromState gives OPEN to a block that is pathfindable
+            # by land, by default any block whose collision is not a full block, and the scaffold's is not. So there
+            # is no floor on top of one (measured: a building site's scaffold top, 0 of 48 villagers strolling and 0 of
+            # 4 with a job site beside it got there)
             return False
         if n.endswith("_door"):
             return n == "iron_door"
@@ -85,10 +90,15 @@ class Ground:
                 return None
             nb = _name(below)
             if nb.endswith(("_fence", "_wall", "_fence_gate")):
-                return None
-            if nb != "water" and (top_height(below) or 0) < 1.0:
+                # on the top of a wall, a fence or a shut gate, 1.5 above the cell below: the game's search walks
+                # there (26.3 WalkNodeEvaluator.getPathTypeStatic: an open cell over a FENCE block is WALKABLE), and a
+                # villager on a block a step lower gets onto it (docs/LESSONS.md, "A villager gets into a walled
+                # cemetery"). Changing this from "never" added no finding to any audit of the build (Nov 2026).
+                fl = y + 0.5
+            elif nb != "water" and (top_height(below) or 0) < 1.0:
                 return None              # standing in the low block below: that is the cell of y - 1
-            fl = float(y)
+            else:
+                fl = float(y)
         top, cy = fl + 1.95, y + 1
         while cy < top:
             st = self.b.get((x, cy, z))
