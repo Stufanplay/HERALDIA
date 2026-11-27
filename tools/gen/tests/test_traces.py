@@ -63,18 +63,27 @@ def test_blocks_only_and_nothing_functional(reg):
             assert not any(f in b for f in traces.FUNCTIONAL), (n, pos, st)
 
 
-def test_each_trace_fits_on_its_plot(reg):
+def test_each_trace_fits_on_its_plot_at_the_plot_s_level(reg):
+    """Where the game puts it: a jigsaw facing up places its child's jigsaw in the cell ABOVE it. The trace's floor (its
+    y = 0) must land on the plot's floor (the level of its entrance), not a block above it: from a trace standing a block
+    up, a neighbour's 1.5-high wall was half a block up and villagers walked over it into a walled cemetery
+    (docs/LESSONS.md). The first version of this test read the slot's own cell as the trace's, and passed."""
     for th in THEMES:
         plot = reg.templates[f"{th['id']}/fillers/plot"]
         px, py, pz = plot.size()
         slot = next(j for j in plot.jigsaws if j["name"] == "heraldia:slot")
+        entrance = next(j for j in plot.jigsaws if j["name"] == "heraldia:entrance")
         sx, sy, sz = slot["pos"]
+        floor = entrance["pos"][1]
+        assert plot.get(0, floor, 1) is not None and sy == floor - 1, (th["id"], slot["pos"], entrance["pos"])
         for k in traces.weights(th):
             t = reg.templates[f"{th['id']}/traces/{k}"]
-            w, h, d = t.size()
-            assert (sx + w <= px, sy + h <= py, sz + d <= pz) == (True, True, True), (th["id"], k, t.size(), plot.size())
             j = t.jigsaws[0]
-            assert j["pos"] == [0, 0, 0] or tuple(j["pos"]) == (0, 0, 0)
+            assert tuple(j["pos"]) == (0, 0, 0)
+            ty = sy + 1 - j["pos"][1]                     # the trace's y = 0 in the plot's coordinates
+            assert ty == floor, (th["id"], k, ty, floor)
+            w, h, d = t.size()
+            assert (sx + w <= px, ty + h <= py, sz + d <= pz) == (True, True, True), (th["id"], k, t.size(), plot.size())
 
 
 def test_generic_audit_passes(reg):

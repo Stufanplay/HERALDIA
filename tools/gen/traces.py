@@ -239,7 +239,11 @@ def plot(th):
             t.set(x, 0, z, soil)
             for y in range(1, H):
                 t.set(x, y, z, "air")
-    t.jigsaw(0, 0, 1, "up_south", "heraldia:slot", "heraldia:bottom", nsid(f"{th['id']}/traces"),
+    # the slot goes UNDER the plot's floor: a jigsaw facing up places its child's jigsaw in the cell above it, so the
+    # trace's own floor (its y = 0, where its jigsaw is) takes the place of the plot's. With the slot at y = 0 the
+    # trace stood a block above the plot, and from its floor a neighbour's 1.5-high wall was half a block up: a step
+    # the game's path search takes (docs/LESSONS.md, "A villager gets into a walled cemetery").
+    t.jigsaw(0, -1, 1, "up_south", "heraldia:slot", "heraldia:bottom", nsid(f"{th['id']}/traces"),
              final_state=f"minecraft:{soil}", joint="aligned")
     t.min_size = (W, H, D + 1)
     return t
