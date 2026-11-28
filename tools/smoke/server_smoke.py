@@ -235,12 +235,22 @@ def pending(lines, seen):
         seen.append(line)
 
 
-def run(proc, lines, seen, cmd, ok):
-    """Sends a command and returns the first success or error reply. First discards (to `seen`) whatever was left in the
-    queue: the line from more than one earlier command (e.g. two "Test passed") is not taken as this one's reply.
+_LOGGED = re.compile(r"^\[[^\]]*\] \[[^\]]*/(?:WARN|ERROR|FATAL)\]: ")
 
-    It returns with the **error** reply too, and raises nothing: a caller that does not look at what came back accepts
-    any failure of its command and carries on as if it had worked. Where the command has to have worked, use `must`."""
+
+def run(proc, lines, seen, cmd, ok):
+    """Sends a command and returns its success reply, the first line that matches `ok`. First discards (to `seen`)
+    whatever was left in the queue: the line from more than one earlier command (e.g. two "Test passed") is not taken
+    as this one's reply.
+
+    **It fails by default**: the wait is `ok` OR `ERROR_PATTERN` (so a failure ends it promptly instead of running out
+    COMMAND_TIMEOUT_S), and a reply that matches `ERROR_PATTERN` and not `ok` raises SystemExit naming the command and
+    the reply. It used to hand that reply back and raise nothing, so a caller that did not look at it accepted the
+    failure and carried on as if the command had worked (docs/LESSONS.md). A caller that has to tell a failure apart
+    -- a retry on `not loaded`, a "No entity" that means "none" -- lists it in its own `ok` and reads the reply;
+    tools/gen/tests/test_run_ok_patterns.py checks that every reply inspected for a failure accepts it. When a red
+    shows up here in a test nobody changed, the fix is to make that call robust, never to widen a pattern until the
+    failure matches it."""
     pending(lines, seen)
     send(proc, cmd)
     end = time.monotonic() + COMMAND_TIMEOUT_S
@@ -251,19 +261,25 @@ def run(proc, lines, seen, cmd, ok):
         # and caravans.py died with a TypeError (CI, Nov 2026). Such a line still counts if `ok` itself matches it.
         if "]: Heraldia: " in m.string and not re.search(ok, m.string):
             continue
+        # Nor is a line the server logs at WARN or ERROR level: a command's reply, failure included, reaches the
+        # console as INFO. Carpet's fake player looks its profile up on api.mojang.com from another thread, and when
+        # that is refused (HTTP 429 in CI) it logs "[Server thread/ERROR]: Got an error with a html body ..." while
+        # the spawn is being awaited -- the spawn works all the same, on a local profile, and the switch stopped
+        # admin.py on that line (#155). Measured before narrowing: in ~127,000 lines of local runs, no WARN or ERROR
+        # line matched ERROR_PATTERN at all, and all 92 that matched it were INFO replies. Counts if `ok` matches it.
+        if _LOGGED.search(m.string) and not re.search(ok, m.string):
+            continue
+        if not re.search(ok, m.string):
+            raise SystemExit(f"{cmd}: the server replied {m.string.strip()!r}")
         return m
 
 
 def must(proc, lines, seen, cmd, ok):
-    """`run`, with the reply asserted: raises SystemExit unless the line that came back holds the success reply `ok`.
+    """The same as `run`, which now fails by default; kept for the callers that say so explicitly.
 
-    Taking the words of the failure out of an `ok` pattern is not enough on its own -- `run` ORs in `ERROR_PATTERN`
-    anyway, so the wait still ends on the error reply and still returns it. Someone has to look at it. A pattern passed
-    here must therefore not match the failure either, or there is nothing left to tell apart."""
-    m = run(proc, lines, seen, cmd, ok)
-    if not re.search(ok, m.string):
-        raise SystemExit(f"{cmd}: the server replied {m.string.strip()!r}")
-    return m
+    A pattern passed here (or to `run`) must not match the failure the caller wants refused: with the failure's words
+    in `ok`, the error reply *is* the accepted reply and there is nothing left to tell apart."""
+    return run(proc, lines, seen, cmd, ok)
 
 
 # Condition waits of the server tests: the check is repeated for up to UNTIL_S seconds (generous: CI is
@@ -328,7 +344,7 @@ class Context:
         return run(self.proc, self.lines, self.seen, cmd, ok)
 
     def must(self, cmd, ok):
-        """`run`, failing if the reply is not the success reply (see `must`)."""
+        """`run`, which fails if the reply is not the success reply (see `must`)."""
         return must(self.proc, self.lines, self.seen, cmd, ok)
 
     def log(self):
