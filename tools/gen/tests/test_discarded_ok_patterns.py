@@ -38,22 +38,7 @@ FAILURES = [r for r in s.FAILURE_REPLIES.values() if re.search(s.ERROR_PATTERN, 
 SKIPPED = ("tools/probes/",)          # probes, not tests: nobody decides a green with them
 
 # (file, ok) -> how many discarded calls in that file still have that `ok`. Shrinks as each lot lands.
-STILL_SWALLOW = {
-    ('tools/smoke/journal.py', 'Applied|No entity|Unable|Unknown|Incorrect'): 1,
-    ('tools/smoke/journal.py', "Granted|granted|Couldn't|Unknown|Incorrect|No "): 1,
-    ('tools/smoke/journal.py', "Granted|granted|Couldn't|Unknown|No "): 3,
-    ('tools/smoke/light_profile.py', '[Ss]print|ticks|Unknown'): 1,
-    ('tools/smoke/mend.py', 'Teleported|Unknown'): 1,
-    ('tools/smoke/runtime_cost.py', 'Events stopped|Eventos parados|Unknown|Incorrect'): 1,
-    ('tools/smoke/runtime_cost.py', 'Prepárate|Get ready|Unknown|Incorrect|already|ya hay'): 1,
-    ('tools/smoke/runtime_cost.py', 'joined the game|Unknown|Incorrect'): 1,
-    ('tools/smoke/runtime_cost.py', 'left the game|Unknown|Incorrect'): 1,
-    ('tools/smoke/treasure.py', 'Dropped|Gave|No items|Unknown'): 1,
-    ('tools/smoke/treasure.py', 'Successfully filled|No blocks|Unknown|Incorrect'): 1,
-    ('tools/smoke/update.py', 'Summoned|Unable|Invalid'): 1,
-    ('tools/smoke/update_check.py', 'Made .* a server operator|Nothing changed|Unknown|Incorrect'): 1,
-    ('tools/smoke/wizard_huts.py', 'Loaded template|Failed'): 1,
-}
+STILL_SWALLOW = {}          # empty since lot 5: a new entry needs the reason it is legitimate
 NOT_LITERAL = 24          # discarded calls whose `ok` is built at run time: not judged, only counted
 
 
@@ -149,6 +134,19 @@ NARROWED = [
      ["Esta aldea no tiene plaza (se quedó sin ella al generarse): no hay sitio para un evento (mercado).",
       "No hay sitio libre en la plaza para el evento «mercado»: algo lo ocupa (una construcción, el tablón, una pieza que falta)."]),
     (r"left the game|Can only manipulate existing players", ["Testigo left the game", "Can only manipulate existing players"]),
+    # Lot 5, the vanilla commands, read on a 26.3 server (same .jar): none of their tolerances was a legitimate "no effect"
+    # -- `advancement grant` on an id that does not exist answers "Unknown advancement: ...", the very thing it hid.
+    (r"Applied|No entity|Unable", ["Applied 1000.0 damage to Zombie", "No entity was found"]),
+    (r"Granted|granted|Couldn't|No ", ["Granted the advancement [Sir Aldric, the Cursed Castellan] to Probe",
+                                      "Couldn't grant advancement [Sir Aldric, the Cursed Castellan] to Probe as they already have it"]),
+    (r"[Ss]print|ticks", ["The game is sprinting", "Sprint completed with 352 ticks per second, or 2.84 ms per tick"]),
+    (r"Teleported", ["Teleported Probe to 0.500000, 101.000000, 0.500000"]),
+    (r"Dropped|Gave|No items", ["Dropped 5 items"]),
+    (r"Successfully filled|No blocks", ["Successfully filled 68 block(s)"]),
+    (r"Summoned new", ["Summoned new Sir Aldric"]),
+    (r"Made .* a server operator|Nothing changed", ["Made Probe a server operator",
+                                                   "Nothing changed. The player is already an operator"]),
+    (r"Loaded template", ['Loaded template "heraldia:medianas/choza_mago/oscuro/a" at 30000, 100, 30000']),
 ]
 
 

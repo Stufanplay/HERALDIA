@@ -408,7 +408,8 @@ class Pass:
     # --- players
     def player(self, name, x, z, mode="creative"):
         c = self.ctx
-        c.run(f"player {name} spawn at {x + 0.5} 200 {z + 0.5}", r"joined the game|Unknown|Incorrect")
+        s.require_carpet(c)
+        c.run(f"player {name} spawn at {x + 0.5} 200 {z + 0.5}", r"joined the game")
         c.until(f"execute if entity @a[name={name}]")
         s.send(c.proc, f"gamemode {mode} {name}")          # no reply if it already is in that mode
         if not c.until(f"execute if entity @a[name={name},gamemode={mode}]", timeout=30):
@@ -431,7 +432,7 @@ class Pass:
     def nobody(self):
         for p in PLAYERS:
             if self.ctx.test(f"execute if entity @a[name={p}]"):
-                self.ctx.run(f"player {p} kill", r"left the game|Unknown|Incorrect")
+                self.ctx.run(f"player {p} kill", r"left the game")
 
     # --- measurement
     def window(self, seconds, during=None):
@@ -504,7 +505,7 @@ class Pass:
                 cx, cz = box[0] + bp.get("centro", [28, 1, 28])[0], box[2] + bp.get("centro", [28, 1, 28])[2]
                 self.player(PLAYERS[1], cx, cz, mode="survival")
                 c.run(f"tp {PLAYERS[1]} {cx + 0.5} {box[1] + 1} {cz + 0.5}", r"Teleported")
-                c.run("heraldia arena start", r"Prepárate|Get ready|Unknown|Incorrect|already|ya hay")
+                c.run("heraldia arena start", r"Prepárate|Get ready|already|ya hay")
 
                 def during():
                     c.run(f"damage @e[tag=heraldia_arena,limit=1,sort=random] 1000 minecraft:player_attack by {PLAYERS[1]}",
@@ -530,7 +531,7 @@ class Pass:
                 c.run("kill @e[tag=heraldia_caravana]", r"Killed|No entity")
             if sc in ("aldea_evento", "dos_aldeas_evento"):
                 out["heraldia_evento"] = c.count("@e[tag=heraldia_evento]")
-                c.run("heraldia event stop all", r"Events stopped|Eventos parados|Unknown|Incorrect")
+                c.run("heraldia event stop all", r"Events stopped|Eventos parados")
         print(f"{'CON' if self.with_it else 'SIN'} {sc}: media {_f(st.get('media'))}, p50 {_f(st.get('p50'))}, p95 {_f(st.get('p95'))}, "
               f"p99 {_f(st.get('p99'))}, peor {_f(st.get('max'))} ms, {st['ticks']} ticks ({_f(st.get('tps'))} TPS); "
               f"entidades {out['entidades']}", flush=True)

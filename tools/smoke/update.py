@@ -123,7 +123,7 @@ def main():
         # call finalizeSpawn, so it comes out as is)
         ctx.run(f'summon minecraft:zombie 400 {y + 1} 400 {{IsBaby:1b,PersistenceRequired:1b,NoAI:1b,Tags:["{ZOMBIE}"],'
                 f'CustomName:{{translate:"heraldia.unicas.castillo.guardian",fallback:"Sir Aldric"}}}}',
-                r"Summoned|Unable|Invalid")
+                r"Summoned new")
         check(ctx.until(f"execute if entity @e[tag={ZOMBIE},tag=heraldia_anclado,tag=heraldia_guardian,tag=heraldia_adulto]"),
               "el arreglo «marcas» no ha puesto las etiquetas al guardián antiguo")
         check(ctx.test(f"execute if entity @e[tag={ZOMBIE},nbt={{IsBaby:0b}}]"), "el arreglo «bebes» no ha hecho adulto al guardián")

@@ -182,7 +182,7 @@ def main():
         # the operator, on joining (once per session); the guest, never
         srv.player(OPERATOR)
         srv.player(GUEST)
-        ctx.run(f"op {OPERATOR}", r"Made .* a server operator|Nothing changed|Unknown|Incorrect")
+        ctx.run(f"op {OPERATOR}", r"Made .* a server operator|Nothing changed")
         s.drain(ctx, 3)
         check(warnings(srv, OPERATOR) == 0, "entró sin ser operador: no debía recibir el aviso")
         srv.hits(OPERATOR)
