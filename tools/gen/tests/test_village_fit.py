@@ -182,3 +182,27 @@ def test_the_fit_phase_takes_a_seed_and_its_default_is_the_one_the_battery_runs(
     assert a.fit_seed == vt.FIT_SEED == "heraldia"
     assert a.seeds == vt.NATURAL_SEEDS
     assert vt.parser().parse_args(["--jar", "x.jar", "--fit-seed", "s4"]).fit_seed == "s4"
+
+
+# ---------------------------------------------------------------- headroom is collision, not "ground"
+def test_a_trunk_or_leaves_over_the_paving_are_not_room_to_stand():
+    """`_is_ground` leaves the registry's tree and plant tags out on purpose, so that a flower on the paving is not
+    taken for the ground. But a LOG and LEAVES are in those tags too and they do have a collision box: a villager does
+    not walk through them. Headroom therefore has to be judged by collision, not by `_is_ground`, or a tree in front of
+    a door reads as free room to stand -- and trees on village pieces are the thing `FIT_MAX_TREES` exists for."""
+    for over in ("minecraft:oak_log", "minecraft:oak_leaves", "minecraft:stripped_spruce_log"):
+        blocks = _street()
+        blocks[(4, 10, -2)] = over
+        blocks[(4, 11, -2)] = over
+        assert vt.walkable_surfaces(blocks, 4, -2, 18, []) == [], over
+        assert _doors(blocks, [HOUSE]) == ((0, 1), (1, 1)), over
+
+
+def test_a_flower_or_grass_over_the_paving_is_still_room_to_stand():
+    """The other side: what has no collision box does not stop anybody, and the paving under it is the street."""
+    for over in ("minecraft:short_grass", "minecraft:dandelion", "minecraft:air"):
+        blocks = _street()
+        blocks[(4, 10, -2)] = over
+        blocks[(4, 11, -2)] = over
+        assert vt.walkable_surfaces(blocks, 4, -2, 18, []) == [9], over
+        assert _doors(blocks, [HOUSE]) == ((1, 1), (1, 1)), over

@@ -495,19 +495,35 @@ def read_note(read):
 HEADROOM = 2        # rows a villager needs free over the block it stands on (it is 1.95 blocks tall)
 
 
+def _in_the_way(name):
+    """Does this block stop a villager standing where it is? Collision, and only collision: a block with no collision
+    box above an eighth (`ground_blocks`, #98) does not, and anything else does, including a block the table does not
+    name (another mod's), as `_is_ground` also counts those as ground.
+
+    This is NOT `_is_ground` negated, and the difference is the whole point. `_is_ground` leaves the registry's tree and
+    plant tags out on purpose, so that a flower on the paving is not taken for the ground of the column. But **a log and
+    leaves are in those tags too, and they do have a collision box**: judging headroom with `_is_ground` would count a
+    tree trunk straight in front of a door as free room to stand (#96), and trees on village pieces are the very thing
+    `FIT_MAX_TREES` exists for."""
+    return name not in ground_blocks.table()["no_collision_box"]
+
+
 def walkable_surfaces(blocks, x, z, top, rigid_boxes):
-    """Rows of the column a villager could stand on, highest first: ground with `HEADROOM` rows free over it. Rows
-    inside the box of another rigid piece are skipped as in `street_ground` -- for the ground and for the headroom
-    alike -- because a piece placed on the street is not the street (#93): under a terminator's tower the paving still
-    counts, and the tower's own top does not."""
+    """Rows of the column a villager could stand on, highest first: ground (`_is_ground`) with `HEADROOM` rows over it
+    that nothing is in the way of (`_in_the_way`). Rows inside the box of another rigid piece are skipped as in
+    `street_ground` -- for the ground and for the headroom alike -- because a piece placed on the street is not the
+    street (#93): under a terminator's tower the paving still counts, and the tower's own top does not."""
     def skipped(y):
         return any(b[0] <= x <= b[3] and b[1] <= y <= b[4] and b[2] <= z <= b[5] for b in rigid_boxes)
 
     def ground_at(y):
         return not skipped(y) and _is_ground(blocks.get((x, y, z), "minecraft:air"))
 
+    def blocked_at(y):
+        return not skipped(y) and _in_the_way(blocks.get((x, y, z), "minecraft:air"))
+
     return [y for y in range(top, top - 64, -1)
-            if ground_at(y) and not any(ground_at(y + k) for k in range(1, HEADROOM + 1))]
+            if ground_at(y) and not any(blocked_at(y + k) for k in range(1, HEADROOM + 1))]
 
 
 def street_step(blocks, x, z, floor, rigid_boxes, read=None):
