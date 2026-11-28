@@ -182,6 +182,26 @@ def verdict(status, job, step_outcome=None):
     return "DIED", "error", f"{job}: status {state!r} in {STATUS_FILE} ({status.get('error', '')})"
 
 
+def server_hint(output):
+    """The line of the server log that says why it stopped, for a DIED verdict: the newest log in `output` (the CI step
+    "Log del servidor" copies latest.log there first; logs/ has one per server), first a failed bind, else the first ERROR
+    line. None if there is no log or nothing in it."""
+    import glob
+    logs = [os.path.join(output, "latest.log")] + sorted(glob.glob(os.path.join(output, "logs", "*.log")), key=os.path.getmtime,
+                                                         reverse=True)
+    for path in logs:
+        if not os.path.isfile(path):
+            continue
+        with open(path, encoding="utf-8", errors="replace") as f:
+            lines = f.read().splitlines()
+        for pick in (lambda l: "FAILED TO BIND" in l or "Address already in use" in l, lambda l: "/ERROR]" in l):
+            hit = [l.strip() for l in lines if pick(l)]
+            if hit:
+                return f"{os.path.relpath(path, output)}: {hit[0][:300]}"
+        return None
+    return None
+
+
 def _escape(text):
     """A GitHub workflow command's message: %, CR and LF are escaped."""
     return text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
@@ -191,7 +211,8 @@ def report(output, job, step_outcome=None):
     """Prints the verdict line (and its annotation), appends it to the job summary and writes veredicto.txt. Exit code:
     0 for MEASURED (the measuring step already carries pass or fail) and SKIPPED, 1 for DIED."""
     outcome, level, text = verdict(read_status(output), job, step_outcome)
-    line = f"{MARK} {job} {outcome}: {text}"
+    hint = server_hint(output) if outcome == "DIED" else None
+    line = f"{MARK} {job} {outcome}: {text}" + (f" | server log, {hint}" if hint else "")
     if os.environ.get("GITHUB_ACTIONS"):
         print(f"::{level} title={MARK} {job} {outcome}::{_escape(line)}", flush=True)
     print(line, flush=True)

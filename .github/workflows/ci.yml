@@ -296,9 +296,19 @@ jobs:
         if: env.MIDE == 'true'
         run: python3 tools/smoke/generation_cost.py --jar build/libs/heraldia-${{ needs.compilar.outputs.version }}.jar --work "$GITHUB_WORKSPACE/build/smoke" --output build/coste
 
+      # Antes era `cp ... 2>/dev/null || true`: si el job moría antes de crear build/coste, el cp fallaba en silencio, el paso
+      # salía en verde y no se subía nada (CI 44965032309, juego muerto en 18 s). Ahora dice qué rescata, o falla a la vista.
       - name: Log del servidor
         if: always() && env.MIDE == 'true'
-        run: cp build/smoke/logs/latest.log build/coste/ 2>/dev/null || true
+        run: |
+          mkdir -p build/coste
+          if [ -f build/smoke/logs/latest.log ]; then
+            cp build/smoke/logs/latest.log build/coste/
+            echo "rescued build/smoke/logs/latest.log ($(wc -l < build/smoke/logs/latest.log) lines) into build/coste/"
+          else
+            echo "::error title=Log del servidor::no server log to rescue: build/smoke/logs/latest.log does not exist (the server never started)"
+            exit 1
+          fi
 
       - name: Veredicto
         if: always()
@@ -309,7 +319,7 @@ jobs:
         with:
           name: coste-generacion
           path: build/coste
-          if-no-files-found: ignore
+          if-no-files-found: error      # build/coste always holds at least estado.json or veredicto.txt
           retention-days: 30
 
   # Coste de jugar (tools/smoke/runtime_cost.py): tiempo por tick con jugadores simulados en aldeas, la arena y una caravana,
@@ -358,9 +368,19 @@ jobs:
         if: env.MIDE == 'true'
         run: python3 tools/smoke/runtime_cost.py --jar build/libs/heraldia-${{ needs.compilar.outputs.version }}.jar --work "$GITHUB_WORKSPACE/build/smoke" --output build/juego
 
+      # Antes era `cp ... 2>/dev/null || true`: si el job moría antes de crear build/juego, el cp fallaba en silencio, el paso
+      # salía en verde y no se subía nada (CI 44965032309, juego muerto en 18 s). Ahora dice qué rescata, o falla a la vista.
       - name: Log del servidor
         if: always() && env.MIDE == 'true'
-        run: cp build/smoke/logs/latest.log build/juego/ 2>/dev/null || true
+        run: |
+          mkdir -p build/juego
+          if [ -f build/smoke/logs/latest.log ]; then
+            cp build/smoke/logs/latest.log build/juego/
+            echo "rescued build/smoke/logs/latest.log ($(wc -l < build/smoke/logs/latest.log) lines) into build/juego/"
+          else
+            echo "::error title=Log del servidor::no server log to rescue: build/smoke/logs/latest.log does not exist (the server never started)"
+            exit 1
+          fi
 
       - name: Veredicto
         if: always()
@@ -371,5 +391,5 @@ jobs:
         with:
           name: coste-juego
           path: build/juego
-          if-no-files-found: ignore
+          if-no-files-found: error      # build/juego always holds at least estado.json or veredicto.txt
           retention-days: 30

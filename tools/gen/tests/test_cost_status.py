@@ -195,3 +195,25 @@ def test_a_retry_round_keeps_the_first_rounds_passes_in_the_partial(tmp_path, mo
     rc.measure("jar", str(tmp_path), 1, 60, 30, False, {})
     p = json.loads((tmp_path / "coste_juego.parcial.json").read_text())
     assert [x["con"] for x in p["pasadas"]] == [True, False, True, False]
+
+
+def test_a_died_verdict_names_the_servers_own_reason(tmp_path, capsys):
+    """CI 44965032309: juego died in 18 s on "FAILED TO BIND TO PORT"; the verdict now carries that line (or the first
+    ERROR line) of the newest server log in --output, so the annotation says why without opening anything."""
+    p = cs.Progress(str(tmp_path), "juego")
+    p.phase("pass with Heraldia: starting the server")
+    p.died("exit", "the server shut down early")
+    (tmp_path / "latest.log").write_text("[00:12:05] [Server thread/INFO]: Starting Minecraft server on *:57181\n"
+                                         "[00:12:05] [Server thread/WARN]: **** FAILED TO BIND TO PORT!\n"
+                                         "[00:12:05] [Server thread/ERROR]: Encountered an unexpected exception\n")
+    assert cs.report(str(tmp_path), "juego", "failure") == 1
+    out = capsys.readouterr().out
+    assert "starting the server" in out and "server log, latest.log: [00:12:05] [Server thread/WARN]: **** FAILED TO BIND" in out
+    (tmp_path / "latest.log").unlink()
+    (tmp_path / "logs").mkdir()
+    (tmp_path / "logs" / "01-with.log").write_text("x\n[Server thread/ERROR]: boom\n")
+    cs.report(str(tmp_path), "juego", "failure")
+    assert "server log, logs/01-with.log: [Server thread/ERROR]: boom" in capsys.readouterr().out
+    cs.Progress(str(tmp_path), "juego").finish(True, "ok")                  # a measurement carries no hint
+    cs.report(str(tmp_path), "juego", "success")
+    assert "server log" not in capsys.readouterr().out
