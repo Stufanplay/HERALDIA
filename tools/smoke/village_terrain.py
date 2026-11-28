@@ -419,8 +419,9 @@ def inside(bb, x, z, margin=0):
     return bb[0] - margin <= x <= bb[3] + margin and bb[2] - margin <= z <= bb[5] + margin
 
 
-def fit_figures(blocks, pieces):
-    """(graded points ok, total), (doors ok, total), natural trunks on the pieces."""
+def fit_figures(blocks, pieces, bad_doors=None):
+    """(graded points ok, total), (doors ok, total), natural trunks on the pieces. With `bad_doors` (a list), each door
+    that is not within a step of its street is appended to it: (piece, its box, the street column, the step)."""
     g_ok = g_n = d_ok = d_n = 0
     boxes = [p["bb"] for p in pieces]
     for p in pieces:
@@ -444,7 +445,10 @@ def fit_figures(blocks, pieces):
         h = ground(blocks, jx + dx, jz + dz, bb[1] + 8)
         d_n += 1
         # standing on the street (h + 1) against standing at the door's joint column (the floor row, bb[1])
-        d_ok += h is not None and abs(h + 1 - bb[1]) <= 1
+        ok = h is not None and abs(h + 1 - bb[1]) <= 1
+        d_ok += ok
+        if not ok and bad_doors is not None:
+            bad_doors.append((p["loc"], bb, (jx + dx, jz + dz), None if h is None else bb[1] - (h + 1)))
     trunks = 0
     for (x, y, z), name in blocks.items():
         if not name.endswith("_log") or not blocks.get((x, y - 1, z), "").endswith(SOIL):
@@ -497,9 +501,14 @@ def terrain_fit(jar, work, fails, measure):
     world = os.path.join(work, "world")
     sid, pieces = start_pieces(world, x, z)
     blocks = read_blocks(world, x - FIT_RADIUS - 16, z - FIT_RADIUS - 16, x + FIT_RADIUS + 16, z + FIT_RADIUS + 16)
-    (g_ok, g_n), (d_ok, d_n), trunks = fit_figures(blocks, pieces)
+    bad = []
+    (g_ok, g_n), (d_ok, d_n), trunks = fit_figures(blocks, pieces, bad)
     print(f"fit: {sid} at {x} {z}: {len(pieces)} pieces; ground at {g_ok} of {g_n} grading points; {d_ok} of {d_n} doors "
           f"within a step of their street; {trunks} natural trunks on the pieces")
+    # every door that misses, by name: a count alone cannot tell one mechanism from four accidents
+    for loc, bb, (cx, cz), step in bad:
+        print(f"fit:   door off its street: {loc} box {bb} street column ({cx}, {cz}) "
+              f"{'no ground under it' if step is None else f'floor {step:+d} from the street'}")
     if measure:
         return
     if not pieces:
