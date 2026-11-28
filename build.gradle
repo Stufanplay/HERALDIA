@@ -109,6 +109,10 @@ def testPesado = tasks.register('testPesado', Test) {
 	classpath = sourceSets.test.runtimeClasspath
 	useJUnitPlatform()
 	systemProperty 'heraldia.generated', generatedDir.get().asFile.absolutePath
+	// el resumen de mcmeta, igual que en `test`: sin esto las pruebas de minas con el terreno real de 26.3 no lo
+	// encuentran y se quedan sin comprobar lo que dicen comprobar
+	systemProperty 'heraldia.mcmeta', mcmetaDir.get().absolutePath
+	dependsOn fetchRegistries
 	testLogging { events 'failed'; showStandardStreams = true; exceptionFormat = 'full' }
 	filter { junitPesadas.each { includeTestsMatching it } }
 	mustRunAfter tasks.named('test')
@@ -123,6 +127,13 @@ def testGen = tasks.register('testGen', Exec) {
 	def marker = layout.buildDirectory.file('test-results/testGen/ok').get().asFile
 	outputs.file(marker)
 	commandLine project.python, '-m', 'pytest', '-q', '-p', 'no:cacheprovider', file('tools/gen/tests').absolutePath
+	// el resumen de registros que varias de estas pruebas necesitan: sin el, se SALTAN en silencio y la tarea pasa
+	// verde sin haberlas corrido (visto el 28-nov-2026: 6 saltadas en un arbol de trabajo recien creado)
+	environment 'MCMETA_SUMMARY', mcmetaDir.get().absolutePath
+	dependsOn fetchRegistries
+	// clean borra build/, incluido el marcador de esta tarea y el resumen de mcmeta: con parallel=true nada ordenaba
+	// las dos y clean podia correr despues (el mismo defecto que ya se arreglo en generateStructures)
+	mustRunAfter tasks.named('clean')
 	doLast { marker.parentFile.mkdirs(); marker.text = 'ok' }
 }
 
