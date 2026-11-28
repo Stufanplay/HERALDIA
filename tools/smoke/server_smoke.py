@@ -200,6 +200,9 @@ def pending(lines, seen):
         seen.append(line)
 
 
+_LOGGED = re.compile(r"^\[[^\]]*\] \[[^\]]*/(?:WARN|ERROR|FATAL)\]: ")
+
+
 def run(proc, lines, seen, cmd, ok):
     """Sends a command and returns its success reply, the first line that matches `ok`. First discards (to `seen`)
     whatever was left in the queue: the line from more than one earlier command (e.g. two "Test passed") is not taken
@@ -222,6 +225,14 @@ def run(proc, lines, seen, cmd, ok):
         # chunks not loaded yet)" (welcome/Welcome), logged while /time query gametime was awaited, was taken as its reply
         # and caravans.py died with a TypeError (CI, Nov 2026). Such a line still counts if `ok` itself matches it.
         if "]: Heraldia: " in m.string and not re.search(ok, m.string):
+            continue
+        # Nor is a line the server logs at WARN or ERROR level: a command's reply, failure included, reaches the
+        # console as INFO. Carpet's fake player looks its profile up on api.mojang.com from another thread, and when
+        # that is refused (HTTP 429 in CI) it logs "[Server thread/ERROR]: Got an error with a html body ..." while
+        # the spawn is being awaited -- the spawn works all the same, on a local profile, and the switch stopped
+        # admin.py on that line (#155). Measured before narrowing: in ~127,000 lines of local runs, no WARN or ERROR
+        # line matched ERROR_PATTERN at all, and all 92 that matched it were INFO replies. Counts if `ok` matches it.
+        if _LOGGED.search(m.string) and not re.search(ok, m.string):
             continue
         if not re.search(ok, m.string):
             raise SystemExit(f"{cmd}: the server replied {m.string.strip()!r}")
