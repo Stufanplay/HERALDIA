@@ -49,3 +49,65 @@ def test_the_gate_is_the_same_with_or_without_the_informative_figure():
     blocks.update({(4, y, -2): "minecraft:mossy_stone_bricks" for y in range(10, 25)})
     for pieces in ([HOUSE], [HOUSE, tower]):
         assert vt.fit_figures(blocks, pieces) == vt.fit_figures(blocks, pieces, [], {})
+
+
+# ---------------------------------------------------------------- what the reader read, in the report
+# `street_ground` returns one number, and four different columns come out of it the same way: the street read; no
+# street in the column; the street skipped because a rigid piece's box covers its paving row, so what lies under the
+# street is read instead; and every row of the column inside rigid boxes. The gate's figure cannot tell them apart and
+# must not try to: what each bad door says it read is what tells them apart, so the line names the block, how many rows
+# were skipped and whether the ground was read below them.
+EAVE = dict(loc="heraldia:t/fillers/eave", proj="rigid", bb=[4, 4, -4, 7, 20, -1], junctions=[])
+
+
+def _bad(blocks, pieces):
+    bad = []
+    vt.fit_figures(blocks, pieces, bad)
+    assert len(bad) == 1, bad
+    loc, bb, col, step, read = bad[0]
+    return step, read
+
+
+def test_the_report_says_the_street_was_read_with_nothing_skipped():
+    """A real step, nothing over the street: the line names the paving it read and says no row was skipped."""
+    step, read = _bad(_street(12), [HOUSE])
+    assert step == -3
+    assert read["name"] == "minecraft:cobblestone" and read["y"] == 12
+    assert read["skipped"] == 0 and read["below_skip"] is False
+
+
+def test_the_report_says_the_street_was_read_past_and_names_the_water():
+    """The street is walkable and a neighbour's rigid box covers its paving row while holding no block in that column
+    (an eave, a tower's hollow corner): the gate reads the water under the street and calls it a hole of 6. The figure
+    is left as it is; the line now says the ground was water and that it was read below a skipped box."""
+    blocks = _street()
+    blocks.update({(4, 3, z): "minecraft:water" for z in (-1, -2, -3)})
+    step, read = _bad(blocks, [HOUSE, EAVE])
+    assert step == 6
+    assert read["name"] == "minecraft:water" and read["y"] == 3
+    assert read["skipped"] and read["below_skip"] is True
+    assert EAVE["bb"] in read["boxes"]
+
+
+def test_the_report_names_a_block_above_the_street_that_outranks_it():
+    """`street_ground` starts at bb[1] + 8 and takes the highest ground of the window, with no headroom asked for, so a
+    rock ceiling over a walkable street outranks the paving one row under the door. Nothing is skipped here: the line
+    names the stone and its height, which is what says the step is not the street's."""
+    blocks = _street()
+    for y in range(16, 19):
+        for z in (-1, -2, -3):
+            blocks[(4, y, z)] = "minecraft:stone"
+    step, read = _bad(blocks, [HOUSE])
+    assert step == -9
+    assert read["name"] == "minecraft:stone" and read["y"] == 18
+    assert read["skipped"] == 0
+
+
+def test_no_ground_tells_an_empty_column_from_one_all_inside_rigid_boxes():
+    """`None` ("no ground under it") joined two columns: one with nothing in the 64 rows read, and one whose 64 rows all
+    fell inside rigid boxes (with the street among them). They are told apart now."""
+    step, read = _bad({}, [HOUSE])
+    assert step is None and read["y"] is None and read["skipped"] == 0
+    tall = dict(loc="heraldia:t/terminators/tower", proj="rigid", bb=[4, -60, -4, 7, 20, -1], junctions=[])
+    step, read = _bad(_street(), [HOUSE, tall])
+    assert step is None and read["y"] is None and read["skipped"] == 64
