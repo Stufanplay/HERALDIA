@@ -161,10 +161,16 @@ class TerrainFitTest {
 
 	@Test
 	void aDoorTooFarAboveTheStreetDropsTheHouseAndItsVillager() {
-		// the street's slab MAX_DOOR + 1 under the row the house's floor is on, with the land flat by the door
-		List<Part> parts = village(STREET.moved(0, -TerrainFit.MAX_DOOR - 1, 0), HOUSE);
+		// the border itself, both sides of it. The village starts a step off (the street's walking row is 64 and the
+		// house's floor row 65), so dropping the street by MAX_DOOR leaves the step at MAX_DOOR + 1: the first value
+		// that goes. One block less is the last one that stays, with its ramp. The land is flat by the door throughout.
+		List<Part> gone = village(STREET.moved(0, -TerrainFit.MAX_DOOR, 0), HOUSE);
 		assertArrayEquals(new Reason[] {Reason.KEPT, Reason.KEPT, Reason.DOOR_STEP, Reason.PARENT},
-				TerrainFit.fit(parts, land((x, z) -> 65)).reasons());
+				TerrainFit.fit(gone, land((x, z) -> 65)).reasons());
+		List<Part> kept = village(STREET.moved(0, -TerrainFit.MAX_DOOR + 1, 0), HOUSE);
+		TerrainFit.Result r = TerrainFit.fit(kept, land((x, z) -> 65));
+		assertArrayEquals(new Reason[] {Reason.KEPT, Reason.KEPT, Reason.KEPT, Reason.KEPT}, r.reasons());
+		assertEquals(TerrainFit.MAX_DOOR, r.grades().get(2).size());
 	}
 
 	@Test
