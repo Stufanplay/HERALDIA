@@ -147,7 +147,9 @@ def main():
             else:
                 ok += 1
             print(f"trofeo {sid}: {lang.get(f'heraldia.trofeo.{sid}')} ({item}, {mob})")
-        ctx.run(f"player {PLAYER} kill", r"left the game|Unknown|Incorrect|.")
+        # clean-up before stopping: a player already gone ("Can only manipulate existing players") is as good as one
+        # that leaves; the `.` this pattern used to end in accepted any line at all, so it waited for nothing
+        ctx.run(f"player {PLAYER} kill", r"left the game|Can only manipulate existing players")
     finally:
         if proc.poll() is None:
             s.send(proc, "stop")

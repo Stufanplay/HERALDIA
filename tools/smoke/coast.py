@@ -59,7 +59,7 @@ def start_up(work, jar, cfg, clean_up):
     threading.Thread(target=s.reader, args=(proc, lines), daemon=True).start()
     s.wait_for(lines, r"Heraldia: (\d+) estructuras registradas", s.START_TIMEOUT_S, seen)
     ctx = s.Context(proc, lines, seen)
-    ctx.run("gamerule spawn_mobs false", r"Gamerule|set to|now")
+    ctx.run("gamerule spawn_mobs false", r"Gamerule|set to")
     return proc, ctx
 
 

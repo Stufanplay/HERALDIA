@@ -413,7 +413,7 @@ def herald_house(p, hp, arena_box):
     if sq:
         cx, cy, cz = o[0] + sq[0] + sq[3] // 2, o[1] + sq[1] + 1, o[2] + sq[2] + sq[3] // 2
         ctx.run(f"execute positioned {cx} {cy} {cz} run heraldia event start market",
-                r"starts in|Empieza el evento|not started|no cabe|No hay|There is no|room|sitio")
+                r"starts in|Empieza el evento|not started|no cabe|No hay|There is no|room|no hay sitio")
         p.check(p.wait_log(r"events: event \d+ starts: market in", timeout=30), "herald: no market day on the plaza")
         ctx.run("heraldia event stop all", r"stopped|parad|[Ee]vent")
     if SETTLE:

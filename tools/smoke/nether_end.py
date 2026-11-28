@@ -246,7 +246,7 @@ def main():
     ctx = s.Context(proc, lines, seen)
     try:
         s.wait_for(lines, r"Heraldia: (\d+) estructuras registradas", s.START_TIMEOUT_S, seen)
-        ctx.run("gamerule spawn_mobs false", r"Gamerule|set to|now")
+        ctx.run("gamerule spawn_mobs false", r"Gamerule|set to")
         fails += check_log(ctx, median, unique_mods)
         f, generate = check_locate(ctx, median, unique_mods)
         fails += f

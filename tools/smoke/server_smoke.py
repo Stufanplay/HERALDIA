@@ -72,6 +72,23 @@ DOWNLOAD_ATTEMPTS = 4         # a download cut off by the network (seen with Fab
 # same Mojang noise; with this pattern, 0. It still has to match `Registry loading errors`, a real 26.3 failure, which
 # is why the word is not simply removed and why `error:` would have been wrong.
 ERROR_PATTERN = r"Unknown|Incorrect|Failed|Invalid|errors?\b(?!=)|not loaded"
+# Real failure replies of the dedicated server, verbatim, keyed by the fragment a caller greps a reply for. The ONE list
+# the two static checks of the harness judge `ok` patterns against -- tools/gen/tests/test_run_ok_patterns.py (a reply
+# that is read must be accepted) and test_discarded_ok_patterns.py (a reply that is thrown away must not be) -- so a new
+# real failure goes in here and nowhere else. Read on a 26.3 server: "Unknown or incomplete command. See below for
+# error" (`notacommand`), "Incorrect argument for command" (`gamerule no_such_rule true`), "Invalid NBT path element"
+# (`data get entity @e[limit=1] Foo..Bar`), "That position is not loaded", "No entity was found" (`tp NoSuchPlayer ...`).
+FAILURE_REPLIES = {
+    "not loaded": "That position is not loaded",
+    "no está cargada": "esa posición no está cargada",
+    "failed": "Test failed",
+    "Failed": "Failed to place",
+    "No items": "No items were found",
+    "No entity": "No entity was found",
+    "Unknown": "Unknown or incomplete command. See below for error",
+    "Incorrect": "Incorrect argument for command",
+    "Invalid": "Invalid NBT path element",
+}
 # /heraldia info nearby: (point, radius); the last one, with the maximum radius, measures the worst case. The search runs off the
 # server thread; on it only the confirmation (INFO_MAIN_MS at most). INFO_MAX_MS is the cap for the full response.
 INFO_POINTS = [((0, 0), None), ((6000, 0), 6000), ((0, -6000), 10000)]

@@ -55,7 +55,7 @@ def with_chunk(ctx, x, z, f):
     try:
         return f()
     finally:
-        ctx.run(f"forceload remove {x} {z}", r"[Rr]emoved|[Uu]nmarked|force|not")
+        ctx.run(f"forceload remove {x} {z}", r"[Rr]emoved|[Uu]nmarked|force")
 
 
 def snapshot(world, chunks):
@@ -105,7 +105,7 @@ def main():
     # ------------------------------------------------------------------ arranque 1
     proc, ctx = me.start_up(a.work, launcher, cfg)
     try:
-        ctx.run("gamerule advance_time false", r"Gamerule|set to|now")
+        ctx.run("gamerule advance_time false", r"Gamerule|set to")
         t0 = time.time()
         me.load_data(ctx, zone)
         print(f"zona de {len(zone)} chunks generada en {time.time() - t0:.0f} s")
@@ -158,7 +158,7 @@ def main():
         ctx.run(f"data merge entity @e[tag={ZOMBIE},limit=1] {{IsBaby:1b}}", r"Modified|Unable|Nothing")
         # without forced chunks on restart: otherwise their fluids run before freezing the world (game changes)
         for x0, z0, x1, z1 in me.fragments(nearby):
-            ctx.run(f"forceload remove {x0} {z0} {x1} {z1}", r"[Rr]emoved|[Uu]nmarked|force|not")
+            ctx.run(f"forceload remove {x0} {z0} {x1} {z1}", r"[Rr]emoved|[Uu]nmarked|force")
         # apply: confirmation with id, with backup
         n0 = len(ctx.seen)
         ctx.run("heraldia update apply", r"Analizando|Analysing|Unknown|Incorrect")

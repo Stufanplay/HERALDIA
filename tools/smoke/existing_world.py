@@ -222,8 +222,8 @@ def start_up(work, launcher, cfg):
     threading.Thread(target=s.reader, args=(proc, lines), daemon=True).start()
     s.wait_for(lines, r"Heraldia: (\d+) estructuras registradas", s.START_TIMEOUT_S, seen)
     ctx = s.Context(proc, lines, seen)
-    ctx.run("gamerule spawn_mobs false", r"Gamerule|set to|now")
-    ctx.run("gamerule random_tick_speed 0", r"Gamerule|set to|now")
+    ctx.run("gamerule spawn_mobs false", r"Gamerule|set to")
+    ctx.run("gamerule random_tick_speed 0", r"Gamerule|set to")
     return proc, ctx
 
 
@@ -280,7 +280,7 @@ def load_data(ctx, chunks, frozen=False):
     else:
         ctx.ticks(60)
     for x0, z0, x1, z1 in fragments(chunks):
-        ctx.run(f"forceload remove {x0} {z0} {x1} {z1}", r"[Rr]emoved|[Uu]nmarked|force|not")
+        ctx.run(f"forceload remove {x0} {z0} {x1} {z1}", r"[Rr]emoved|[Uu]nmarked|force")
 
 
 def main():

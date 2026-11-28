@@ -166,7 +166,7 @@ def main():
             for cx, cz in sorted(box_chunks(box)):
                 ctx.until(f"execute if loaded {cx * 16} 64 {cz * 16}", timeout=300)
             ctx.run("save-all flush", r"Saved the game|saved")
-            ctx.run("forceload remove all", r"[Rr]emoved|[Uu]nmarked|force|not")
+            ctx.run("forceload remove all", r"[Rr]emoved|[Uu]nmarked|force")
             others = set()
             for c in box_chunks(box):
                 starts, refs = structures(world, *c)
@@ -202,7 +202,7 @@ def main():
     t0 = time.time()
     proc, ctx = me.start_up(a.work, launcher, CONFIG_OFF)
     try:
-        ctx.run("gamerule advance_time false", r"Gamerule|set to|now")
+        ctx.run("gamerule advance_time false", r"Gamerule|set to")
         me.load_data(ctx, zone)
         x0, y, z0, x1, _, z1 = house
         up.with_chunk(ctx, x0, z0, lambda: [

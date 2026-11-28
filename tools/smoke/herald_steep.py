@@ -422,7 +422,7 @@ def main():
         # The block is at the plaza's centre, inside what the build levels and paves over.
         ctx.run(f"setblock {x} {y - 1} {z} minecraft:dirt", r"Changed the block|No blocks|Could not set")
         s.stand(ctx, P, x, y, z)
-        ctx.run(f"execute as {P} run heraldia herald place here", r"heraldia|Herald|Heraldo|place|confirm")
+        ctx.run(f"execute as {P} run heraldia herald place here", r"heraldia|Herald|Heraldo|confirm")
         ctx.run(f"execute as {P} run heraldia herald place confirm", r"Building the Herald's House|Construyendo la Casa del Heraldo")
         m = p.wait_log(PLACED, 900)
         if not p.check(m, "the town is not placed"):
