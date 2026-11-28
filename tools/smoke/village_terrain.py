@@ -432,23 +432,59 @@ def inside(bb, x, z, margin=0):
     return bb[0] - margin <= x <= bb[3] + margin and bb[2] - margin <= z <= bb[5] + margin
 
 
-def street_ground(blocks, x, z, top, rigid_boxes):
+def street_ground(blocks, x, z, top, rigid_boxes, read=None):
     """`ground` that reads the street, not what stands on it: the blocks inside the box of a rigid piece (a filler, a
     terminator's tower, a building) are skipped, so a piece placed over the street column does not count as its ground.
     `ground` takes the highest block of the column, which there is the top of that piece (a well over an avenue, a
-    tower over a street: measured with the doors named, Nov 2026). The doors of the fit are read with it."""
+    tower over a street: measured with the doors named, Nov 2026). The doors of the fit are read with it.
+
+    The skip is by BOX, not by block, and that is worth saying out loud: a village piece's box spans its whole height
+    while most of its columns are air (eaves, overhangs, the 15-row tower with hollow corners), so a street that is
+    perfectly walkable can be skipped just the same and what lies under it read instead. A piece that really stands ON
+    the street has its box floor over the paving (the floor row of a rigid piece is the street's paving + 1), so its box
+    does not hold the paving row and the skip should never reach it; a box that does start at or below street level is
+    not a piece over the street. Nor is any headroom asked for: the highest ground of the window wins, so a rock ceiling
+    over a walkable street outranks the paving one row under the door.
+
+    One number cannot tell those columns apart, and this function does not try to: what it returns and what the gate
+    compares are unchanged. `read` (a dict) is filled in with what was read instead, so the report can tell them apart:
+    `y` and `name` of the ground taken (`y` None if none), `skipped` rows skipped inside rigid boxes, `boxes` the boxes
+    that skipped them, and `below_skip` whether the ground returned lies below a skipped row (the street read past)."""
+    skipped, boxes, past = 0, [], False
     for y in range(top, top - 64, -1):
-        if any(b[0] <= x <= b[3] and b[1] <= y <= b[4] and b[2] <= z <= b[5] for b in rigid_boxes):
+        hit = [b for b in rigid_boxes if b[0] <= x <= b[3] and b[1] <= y <= b[4] and b[2] <= z <= b[5]]
+        if hit:
+            skipped += 1
+            past = True
+            boxes += [b for b in hit if b not in boxes]
             continue
-        if _is_ground(blocks.get((x, y, z), "minecraft:air")):
+        name = blocks.get((x, y, z), "minecraft:air")
+        if _is_ground(name):
+            if read is not None:
+                read.update(y=y, name=name, skipped=skipped, boxes=boxes, below_skip=past)
             return y
+    if read is not None:
+        read.update(y=None, name=None, skipped=skipped, boxes=boxes, below_skip=False)
     return None
+
+
+def read_note(read):
+    """What `street_ground` read in a column, in words: a count alone cannot tell one mechanism from four accidents, and
+    neither can one height. Names the block (the gate counts water as ground, so a hole "with water" has to say so),
+    how many rows were skipped inside the boxes of rigid pieces and whether the street was read past under them."""
+    n = len(read["boxes"])
+    boxes = f"{n} rigid box{'' if n == 1 else 'es'} {read['boxes']}"
+    skipped = f"{read['skipped']} rows skipped inside {boxes}" if read["skipped"] else "no rows skipped"
+    if read["y"] is None:
+        return f"nothing read in the 64 rows: {skipped}" if read["skipped"] < 64 \
+            else f"every one of the 64 rows fell inside {boxes}"
+    return f"ground {read['name']} at y={read['y']}, {skipped}" + (", read below them" if read["below_skip"] else "")
 
 
 def fit_figures(blocks, pieces, bad_doors=None, highest=None):
     """(graded points ok, total), (doors ok, total), natural trunks on the pieces. A door is read with `street_ground`:
     the street under any piece placed on it. With `bad_doors` (a list), each door that is not within a step of its
-    street is appended to it: (piece, its box, the street column, the step). With `highest` (a dict), the same doors
+    street is appended to it: (piece, its box, the street column, the step, what `street_ground` read there). With `highest` (a dict), the same doors
     read with `ground` (the highest block of the street column, what the test read until Nov 2026) go into it as ok,
     n and bad: an informative figure, which the test prints and never compares."""
     g_ok = g_n = d_ok = d_n = 0
@@ -474,13 +510,14 @@ def fit_figures(blocks, pieces, bad_doors=None, highest=None):
         jx, jz = joint
         dx = -1 if jx < bb[0] else 1 if jx > bb[3] else 0
         dz = -1 if jz < bb[2] else 1 if jz > bb[5] else 0
-        h = street_ground(blocks, jx + dx, jz + dz, bb[1] + 8, [b for b in rigid if b is not bb])
+        read = {}
+        h = street_ground(blocks, jx + dx, jz + dz, bb[1] + 8, [b for b in rigid if b is not bb], read)
         d_n += 1
         # standing on the street (h + 1) against standing at the door's joint column (the floor row, bb[1])
         ok = h is not None and abs(h + 1 - bb[1]) <= 1
         d_ok += ok
         if not ok and bad_doors is not None:
-            bad_doors.append((p["loc"], bb, (jx + dx, jz + dz), None if h is None else bb[1] - (h + 1)))
+            bad_doors.append((p["loc"], bb, (jx + dx, jz + dz), None if h is None else bb[1] - (h + 1), read))
         if highest is not None:
             hh = ground(blocks, jx + dx, jz + dz, bb[1] + 8)
             ok_h = hh is not None and abs(hh + 1 - bb[1]) <= 1
@@ -549,9 +586,9 @@ def terrain_fit(jar, work, fails, measure):
           f"| {highest['ok']} of {highest['n']} ({share(highest['ok'], highest['n'])}, the highest block of the street "
           f"column, informative: compared with nothing)")
     # every door that misses, by name: a count alone cannot tell one mechanism from four accidents
-    for loc, bb, (cx, cz), step in bad:
+    for loc, bb, (cx, cz), step, read in bad:
         print(f"fit:   door off its street: {loc} box {bb} street column ({cx}, {cz}) "
-              f"{'no ground under it' if step is None else f'floor {step:+d} from the street'}")
+              f"{'no ground under it' if step is None else f'floor {step:+d} from the street'}; {read_note(read)}")
     for loc, bb, (cx, cz), step in highest["bad"]:
         print(f"fit:   (informative) door off the highest block of its street column: {loc} box {bb} street column ({cx}, {cz}) "
               f"{'no ground under it' if step is None else f'floor {step:+d} from the street'}")
