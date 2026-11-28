@@ -490,22 +490,45 @@ def unit_tests():
                           cwd=ROOT).returncode
 
 
+def run_teed(cmd, out_path=None):
+    """Runs `cmd` with its stdout and stderr shown as they come and, if `out_path` is given, also written there.
+    The test's own output is where its failure message is (a test's `FALLOS:` list, a `SystemExit` from `run`); the
+    server's logs/latest.log does not hold it, so an artifact with only that log could not say why a test failed."""
+    out = open(out_path, "w", encoding="utf-8", errors="replace") if out_path else None
+    try:
+        proc = subprocess.Popen(cmd, cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                                encoding="utf-8", errors="replace")
+        for line in proc.stdout:
+            sys.stdout.write(line)
+            if out:
+                out.write(line)
+        sys.stdout.flush()
+        return proc.wait()
+    finally:
+        if out:
+            out.close()
+
+
 def execute(tests, jar, work, logs=None):
     """Runs the server tests serially (all of them, even if one fails) and returns those that fail. Copies the
-    logs/latest.log of each one to `logs` (if given) to upload it as an artifact."""
+    logs/latest.log of each one to `logs` (if given) to upload it as an artifact, and writes there each test's own
+    output too (`<test>.output.txt`), which is where its failure message is."""
     bad_all = []
     for p in tests:
         t0 = time.monotonic()
+        name = p.replace("::", "-").replace("/", "-").replace(".py", "")
         print(f"::group::{p}" if os.environ.get("GITHUB_ACTIONS") else f"== {p}", flush=True)
-        r = subprocess.run([sys.executable, *order(p), "--jar", jar, "--work", work], cwd=ROOT).returncode
+        if logs:
+            os.makedirs(logs, exist_ok=True)
+        r = run_teed([sys.executable, *order(p), "--jar", jar, "--work", work],
+                     os.path.join(logs, name + ".output.txt") if logs else None)
         if os.environ.get("GITHUB_ACTIONS"):
             print("::endgroup::")
         print(f"{'OK' if r == 0 else 'FAIL'} {p} ({time.monotonic() - t0:.0f} s)", flush=True)
         if logs:
-            os.makedirs(logs, exist_ok=True)
             src = os.path.join(work, "logs", "latest.log")
             if os.path.isfile(src):
-                shutil.copy(src, os.path.join(logs, p.replace("::", "-").replace("/", "-").replace(".py", "") + ".log"))
+                shutil.copy(src, os.path.join(logs, name + ".log"))
         if r:
             bad_all.append(p)
     return bad_all

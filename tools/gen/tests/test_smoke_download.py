@@ -1,5 +1,5 @@
 """tools/smoke/server_smoke.py: test server downloads (a cut-off download is not left in the cache), whether a
-command's reply is looked at (`run` comes back with the error reply, `must` does not accept it) and where an entity has
+command's reply is looked at (`run` fails by default on an error reply it does not accept) and where an entity has
 to be standing for `land` to call it settled; and the pure functions of tools/smoke/existing_world.py (reading sections
 and comparing saved chunks)."""
 import io, os, re, sys, zipfile
@@ -161,7 +161,8 @@ class _Server:
 
     def write(self, text):
         self.sent.append(text)
-        self.lines.put(self.reply)
+        for line in (self.reply if isinstance(self.reply, list) else [self.reply]):     # a list: lines in order
+            self.lines.put(line)
 
     def flush(self):
         pass
@@ -178,12 +179,21 @@ BAD_REPLY = "[00:00:00] [Server thread/INFO]: Incorrect argument for command at 
 RULE = r"[Gg]ame ?rule .*keep_inventory.*true"
 
 
-def test_run_comes_back_with_the_error_reply_and_raises_nothing():
-    """The property the callers have to know about: `run` waits for `ok` OR `ERROR_PATTERN` and returns either, so a
-    caller that does not read the reply accepts the failure."""
-    m = _answer(BAD_REPLY, "gamerule keep_inventory true", RULE, s.run)
-    assert m.group(0) == "Incorrect"
-    assert not re.search(RULE, m.string)
+def test_run_fails_by_default_on_the_error_reply():
+    """The switch: `run` waits for `ok` OR `ERROR_PATTERN` (so a failure ends the wait at once) and raises when the
+    reply that ended it is not one `ok` accepts. It used to return it, so a caller that did not read the reply accepted
+    the failure."""
+    assert _answer(OK_REPLY, "gamerule keep_inventory true", RULE, s.run).string == OK_REPLY
+    with pytest.raises(SystemExit) as e:
+        _answer(BAD_REPLY, "gamerule keep_inventory true", RULE, s.run)
+    assert "Incorrect argument" in str(e.value) and "gamerule keep_inventory true" in str(e.value)
+
+
+def test_run_hands_back_a_failure_the_caller_accepts():
+    """The retry idiom stays possible: a caller that lists the failure in its own `ok` gets it back to read."""
+    unloaded = "[00:00:00] [Server thread/INFO]: System chat: That position is not loaded\n"
+    ok = r"Successfully filled|No blocks|not loaded(?! yet)"
+    assert "not loaded" in _answer(unloaded, "fill 0 0 0 1 1 1 minecraft:stone", ok, s.run).string
 
 
 def test_must_accepts_the_success_reply_and_rejects_the_error_one():
@@ -247,3 +257,32 @@ def test_the_error_word_has_to_stand_on_its_own():
         assert not re.search(s.ERROR_PATTERN, line), line
     for line in must:
         assert re.search(s.ERROR_PATTERN, line), line
+
+
+# Verbatim from #155's CI log (admin.py): Carpet's profile lookup refused with HTTP 429 while `player ... spawn` was
+# awaited; the spawn itself worked a second later.
+MOJANG_ERROR = ("[22:39:09] [Server thread/ERROR]: Got an error with a html body connecting to "
+                "https://api.mojang.com/users/profiles/minecraft/revisor: <!DOCTYPE html>\n")
+JOINED = "[22:39:10] [Server thread/INFO]: Revisor joined the game\n"
+UNLOADED_INFO = "[00:00:00] [Server thread/INFO]: System chat: That position is not loaded\n"
+
+
+def test_a_line_logged_at_error_level_is_not_the_reply():
+    """The switch raises on replies, not on whatever the server logs meanwhile: an ERROR line from another lookup that
+    lands in the wait is skipped, and the real reply that follows is returned."""
+    assert re.search(s.ERROR_PATTERN, MOJANG_ERROR), "the case only means something if the line looks like a failure"
+    m = _answer([MOJANG_ERROR, JOINED], "player Revisor spawn at 0 100 0", r"joined the game", s.run)
+    assert m.string == JOINED
+
+
+def test_a_failure_reply_after_a_logged_error_still_raises():
+    """Skipping logged lines must not blunt the switch: the INFO failure reply after it still stops the test."""
+    with pytest.raises(SystemExit) as e:
+        _answer([MOJANG_ERROR, UNLOADED_INFO], "fill 0 0 0 1 1 1 minecraft:stone", r"Successfully filled", s.run)
+    assert "not loaded" in str(e.value)
+
+
+def test_a_logged_line_counts_when_ok_asks_for_it():
+    """Like the mod's own lines: a caller that waits for a WARN or ERROR line on purpose still gets it."""
+    m = _answer([MOJANG_ERROR], "player Revisor spawn at 0 100 0", r"Got an error with a html body", s.run)
+    assert m.string == MOJANG_ERROR
