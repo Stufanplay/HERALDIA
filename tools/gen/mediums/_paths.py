@@ -28,19 +28,21 @@ def _name(st):
 
 
 class Ground:
-    """The template (as a villager sees it: _inhabitants._no_ladders) on flat ground."""
+    """The template (as a villager sees it: _inhabitants._no_ladders) on flat ground, its top at y = `base` - 1: a
+    villager outside the piece has its feet at y = `base`. 0 for a piece whose own ground is its layer y = -1 (a medium
+    structure, a house); a village piece is joined at the height of its jigsaw (`ladders.level`)."""
 
-    def __init__(self, t, margin=MARGIN):
+    def __init__(self, t, margin=MARGIN, base=0):
         import lint
         from . import _inhabitants as inh
         self.lint = lint
         view = lint.resolved(inh._no_ladders(t))
         self.b = {p: st for p, (st, _) in view.blocks.items() if st and _name(st) not in ("air", "structure_void", "jigsaw")}
         sx, _, sz = t.size()
-        self.box = (-margin, -margin, sx + margin, sz + margin)
+        self.box, self.base = (-margin, -margin, sx + margin, sz + margin), base
         for x in range(-margin, sx + margin):
             for z in range(-margin, sz + margin):
-                self.b.setdefault((x, -1, z), "minecraft:stone")
+                self.b.setdefault((x, base - 1, z), "minecraft:stone")
         self._floor, self._nb = {}, {}
 
     def solid(self, st):
