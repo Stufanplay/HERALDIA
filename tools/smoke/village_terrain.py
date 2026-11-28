@@ -475,16 +475,81 @@ def read_note(read):
     n = len(read["boxes"])
     boxes = f"{n} rigid box{'' if n == 1 else 'es'} {read['boxes']}"
     skipped = f"{read['skipped']} rows skipped inside {boxes}" if read["skipped"] else "no rows skipped"
+    tail = ""
+    if "surfaces" in read and not read["surfaces"]:
+        tail += "; no walkable surface in the column"
+    if read.get("parent"):
+        tail += f"; hangs from {read['parent']} box {read['parent_bb']}"
     if read["y"] is None:
-        return f"nothing read in the 64 rows: {skipped}" if read["skipped"] < 64 \
-            else f"every one of the 64 rows fell inside {boxes}"
-    return f"ground {read['name']} at y={read['y']}, {skipped}" + (", read below them" if read["below_skip"] else "")
+        return (f"nothing read in the 64 rows: {skipped}" if read["skipped"] < 64
+                else f"every one of the 64 rows fell inside {boxes}") + tail
+    note = f"ground {read['name']} at y={read['y']}, {skipped}" + (", read below them" if read["below_skip"] else "")
+    if "surfaces" in read:
+        ys = read["surfaces"]
+        note += f"; walkable surfaces {ys}" if ys else "; no walkable surface in the column"
+    if read.get("parent"):
+        note += f"; hangs from {read['parent']} box {read['parent_bb']}"
+    return note
+
+
+HEADROOM = 2        # rows a villager needs free over the block it stands on (it is 1.95 blocks tall)
+
+
+def walkable_surfaces(blocks, x, z, top, rigid_boxes):
+    """Rows of the column a villager could stand on, highest first: ground with `HEADROOM` rows free over it. Rows
+    inside the box of another rigid piece are skipped as in `street_ground` -- for the ground and for the headroom
+    alike -- because a piece placed on the street is not the street (#93): under a terminator's tower the paving still
+    counts, and the tower's own top does not."""
+    def skipped(y):
+        return any(b[0] <= x <= b[3] and b[1] <= y <= b[4] and b[2] <= z <= b[5] for b in rigid_boxes)
+
+    def ground_at(y):
+        return not skipped(y) and _is_ground(blocks.get((x, y, z), "minecraft:air"))
+
+    return [y for y in range(top, top - 64, -1)
+            if ground_at(y) and not any(ground_at(y + k) for k in range(1, HEADROOM + 1))]
+
+
+def street_step(blocks, x, z, floor, rigid_boxes, read=None):
+    """The step from a door's floor row to its street, by the rule the owner set (#96): a door fits when the column
+    holds **some** walkable ground within a step of the door, not when the highest block of the column happens to be
+    there. The highest block is not the question a villager asks -- a rock ceiling over a walkable street, or a street
+    on an overhang with firm ground under it, are both walked out of without stooping, and each of them read as a step
+    of up to 9 while the door was fine; and a paving with a block straight on it, where nobody fits, read as no step at
+    all. Both are decided by the same thing: whether there is room to stand.
+
+    Returns `(step, surface)` of the walkable surface closest to the door (the step as the gate counts it,
+    `floor - (surface + 1)`), or `(None, None)` when the column holds none in the window read. `read` is filled in with
+    what `street_ground` would have taken, plus every surface found, so a door that misses says why."""
+    ys = walkable_surfaces(blocks, x, z, floor + 8, rigid_boxes)
+    street_ground(blocks, x, z, floor + 8, rigid_boxes, read)        # the old reading, kept for the report
+    if read is not None:
+        read.update(surfaces=ys)
+    if not ys:
+        return None, None
+    surface = min(ys, key=lambda y: abs(floor - (y + 1)))
+    return floor - (surface + 1), surface
+
+
+def parent_of(pieces, i):
+    """`(index, (jx, jz))` of the piece that piece `i` hangs from and their joint, or None. The jigsaw places a parent
+    before its children and gives both a junction at the other's jigsaw block, so the parent is the latest earlier piece
+    whose footprint holds one of the child's junctions while the child's footprint holds one of the parent's: the same
+    rule `VillageStructure.parent` decides with in the mod."""
+    for j in range(i - 1, -1, -1):
+        for jx, jy, jz, dy, proj in pieces[i]["junctions"]:
+            if not inside(pieces[j]["bb"], jx, jz) or inside(pieces[i]["bb"], jx, jz):
+                continue
+            if any(inside(pieces[i]["bb"], tx, tz) for tx, ty, tz, tdy, tproj in pieces[j]["junctions"]):
+                return j, (jx, jz)
+    return None
 
 
 def fit_figures(blocks, pieces, bad_doors=None, highest=None):
-    """(graded points ok, total), (doors ok, total), natural trunks on the pieces. A door is read with `street_ground`:
-    the street under any piece placed on it. With `bad_doors` (a list), each door that is not within a step of its
-    street is appended to it: (piece, its box, the street column, the step, what `street_ground` read there). With `highest` (a dict), the same doors
+    """(graded points ok, total), (doors ok, total), natural trunks on the pieces. A door is read with `street_step`:
+    it fits when the column one step into the piece it hangs from holds some walkable ground within a step of the door's
+    floor row (#96, the owner's rule). With `bad_doors` (a list), each door that misses is appended to it: (piece, its
+    box, the column measured, the step, what was read there). With `highest` (a dict), the same doors
     read with `ground` (the highest block of the street column, what the test read until Nov 2026) go into it as ok,
     n and bad: an informative figure, which the test prints and never compares."""
     g_ok = g_n = d_ok = d_n = 0
@@ -492,7 +557,7 @@ def fit_figures(blocks, pieces, bad_doors=None, highest=None):
     rigid = [p["bb"] for p in pieces if p["proj"] == "rigid"]
     if highest is not None:
         highest.update(ok=0, n=0, bad=[])
-    for p in pieces:
+    for i, p in enumerate(pieces):
         bb = p["bb"]
         # grading points: junctions of a piece inside its own footprint with no height difference (a joint's junction lies
         # on the other piece, one block outside the footprint)
@@ -510,14 +575,24 @@ def fit_figures(blocks, pieces, bad_doors=None, highest=None):
         jx, jz = joint
         dx = -1 if jx < bb[0] else 1 if jx > bb[3] else 0
         dz = -1 if jz < bb[2] else 1 if jz > bb[5] else 0
+        # the column is chosen by geometry -- a step out from the joint, away from the house -- and nothing makes that
+        # land inside the piece the door hangs from: on a narrow street, at a corner or at a crossing it falls on the
+        # piece beyond, and the door gets judged against somebody else's street. Measure inside the parent: the joint's
+        # own column is inside it by construction, so it is the fallback when the step out leaves it.
+        link = parent_of(pieces, i)
+        cx, cz = jx + dx, jz + dz
+        if link is not None and not inside(pieces[link[0]]["bb"], cx, cz):
+            cx, cz = jx, jz
         read = {}
-        h = street_ground(blocks, jx + dx, jz + dz, bb[1] + 8, [b for b in rigid if b is not bb], read)
+        step, _surface = street_step(blocks, cx, cz, bb[1], [b for b in rigid if b is not bb], read)
+        if read is not None and link is not None:
+            read.update(parent=pieces[link[0]]["loc"], parent_bb=pieces[link[0]]["bb"])
         d_n += 1
-        # standing on the street (h + 1) against standing at the door's joint column (the floor row, bb[1])
-        ok = h is not None and abs(h + 1 - bb[1]) <= 1
+        # some walkable ground of the column within a step of the door's floor row (bb[1]): the owner's rule, #96
+        ok = step is not None and abs(step) <= 1
         d_ok += ok
         if not ok and bad_doors is not None:
-            bad_doors.append((p["loc"], bb, (jx + dx, jz + dz), None if h is None else bb[1] - (h + 1), read))
+            bad_doors.append((p["loc"], bb, (cx, cz), step, read))
         if highest is not None:
             hh = ground(blocks, jx + dx, jz + dz, bb[1] + 8)
             ok_h = hh is not None and abs(hh + 1 - bb[1]) <= 1

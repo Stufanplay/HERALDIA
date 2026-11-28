@@ -89,18 +89,53 @@ def test_the_report_says_the_street_was_read_past_and_names_the_water():
     assert EAVE["bb"] in read["boxes"]
 
 
-def test_the_report_names_a_block_above_the_street_that_outranks_it():
-    """`street_ground` starts at bb[1] + 8 and takes the highest ground of the window, with no headroom asked for, so a
-    rock ceiling over a walkable street outranks the paving one row under the door. Nothing is skipped here: the line
-    names the stone and its height, which is what says the step is not the street's."""
+def _ceiling():
+    """A walkable street with a rock ceiling in the rows the window reaches over the door: two free rows under it, so a
+    villager walks out without stooping."""
     blocks = _street()
     for y in range(16, 19):
         for z in (-1, -2, -3):
             blocks[(4, y, z)] = "minecraft:stone"
-    step, read = _bad(blocks, [HOUSE])
-    assert step == -9
-    assert read["name"] == "minecraft:stone" and read["y"] == 18
-    assert read["skipped"] == 0
+    return blocks
+
+
+def test_a_rock_ceiling_over_a_walkable_street_does_not_make_a_step():
+    """The owner's rule (#96): a door fits when the column holds SOME walkable ground within a step, not when the
+    highest block of the column happens to be there. `street_ground` still reports the stone it would have taken."""
+    assert _doors(_ceiling(), [HOUSE]) == ((1, 1), (0, 1))
+    read = {}
+    assert vt.street_step(_ceiling(), 4, -2, 10, [], read) == (0, 9)
+    assert read["name"] == "minecraft:stone" and read["y"] == 18 and read["surfaces"] == [18, 9]
+
+
+def test_a_street_on_an_overhang_with_ground_at_the_door_does_not_make_a_step():
+    """The seed-s8 shape the owner ruled on: the street passes overhead, with three free rows under it and firm ground
+    level with the door. The villager walks out onto the ground, so the door fits."""
+    blocks = {(x, 14, z): "minecraft:cobblestone" for x in range(2, 7) for z in (-1, -2, -3)}
+    blocks.update({(x, 9, z): "minecraft:grass_block" for x in range(2, 7) for z in (-1, -2, -3)})
+    assert _doors(blocks, [HOUSE]) == ((1, 1), (0, 1))
+
+
+def test_a_door_with_no_walkable_ground_within_a_step_still_fails():
+    """The real defect: the only ground in the column is three rows under the door and nothing stands over it."""
+    blocks = {(x, 6, z): "minecraft:coarse_dirt" for x in range(2, 7) for z in (-1, -2, -3)}
+    assert _doors(blocks, [HOUSE]) == ((0, 1), (0, 1))
+    assert _bad(blocks, [HOUSE])[0] == 3
+
+
+def test_ground_with_nothing_over_it_to_stand_in_is_not_walkable():
+    """The other side of the same hole: the paving is at the door's height but two solid rows sit straight on it, so
+    nobody stands on the paving and it is not the street any more. The only surface left is the top of what blocks it,
+    two over the door, and the door misses. (One row would be a doorstep a villager steps up on, and passes.)"""
+    blocks = _street()
+    blocks[(4, 10, -2)] = "minecraft:stone"
+    blocks[(4, 11, -2)] = "minecraft:stone"
+    assert vt.walkable_surfaces(blocks, 4, -2, 18, []) == [11]
+    assert _doors(blocks, [HOUSE]) == ((0, 1), (0, 1))
+    assert _bad(blocks, [HOUSE])[0] == -2
+    one = _street()
+    one[(4, 10, -2)] = "minecraft:stone"
+    assert _doors(one, [HOUSE]) == ((1, 1), (1, 1))
 
 
 def test_no_ground_tells_an_empty_column_from_one_all_inside_rigid_boxes():
@@ -111,3 +146,29 @@ def test_no_ground_tells_an_empty_column_from_one_all_inside_rigid_boxes():
     tall = dict(loc="heraldia:t/terminators/tower", proj="rigid", bb=[4, -60, -4, 7, 20, -1], junctions=[])
     step, read = _bad(_street(), [HOUSE, tall])
     assert step is None and read["y"] is None and read["skipped"] == 64
+
+
+# ---------------------------------------------------------------- the parent, and the column measured inside it
+STREET = dict(loc="heraldia:t/streets/s0", proj="terrain_matching", bb=[2, 9, -3, 6, 14, -1],
+              junctions=[(4, 10, 0, 0, "rigid")])    # its side slot, on the house's door row
+
+
+def test_the_report_names_the_piece_the_door_hangs_from():
+    """A count of bad doors cannot say which street a door is off; the parent can only be read from the junctions, as
+    the mod reads it, so the report reads it the same way."""
+    step, read = _bad(_street(12), [STREET, HOUSE])
+    assert step == -3
+    assert read["parent"] == "heraldia:t/streets/s0" and read["parent_bb"] == STREET["bb"]
+
+
+def test_the_measured_column_stays_inside_the_parent():
+    """The column measured is chosen by geometry -- one step out from the joint, away from the house -- and nothing makes
+    that land inside the parent: with a street one column deep it falls on the piece beyond it. Measuring there judges a
+    door against somebody else's street, so the joint's own column is used instead."""
+    narrow = dict(loc="heraldia:t/streets/s0", proj="terrain_matching", bb=[2, 9, -1, 6, 14, -1],
+                  junctions=[(4, 10, 0, 0, "rigid")])
+    blocks = {(x, 9, -1): "minecraft:cobblestone" for x in range(2, 7)}        # the street: one column deep
+    blocks.update({(x, 3, -2): "minecraft:stone" for x in range(2, 7)})        # the next piece over, far below
+    assert _doors(blocks, [narrow, HOUSE]) == ((1, 1), (0, 1))
+    read = {}
+    assert vt.street_step(blocks, 4, -1, 10, [], read) == (0, 9)
