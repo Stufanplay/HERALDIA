@@ -297,3 +297,39 @@ def test_the_watermill_has_no_trap(reg):
     g = _paths.Ground(t)
     assert round(_paths.walks(g, (4, 1, 12))[(4, 1, 14)], 1) == 5.0
     assert _paths.find_path(g, (4, 1, 14), (4, 1, 12))[0]
+
+
+def _lodge():
+    """A lodge on a plank floor (layer 1, over its foundation in layer 0) walled to y = 5, with its door on the floor, a
+    ladder inside up to the top of the wall and, outside, steps from there down to the ground."""
+    import core
+    t = core.Template("medianas/toy/x/a")
+    for x in range(5):
+        for z in range(5):
+            t.set(x, 0, z, "stone")
+            t.set(x, 1, z, "oak_planks")
+            if x in (0, 4) or z in (0, 4):
+                for y in range(2, 6):
+                    t.set(x, y, z, "stone")
+    t.set(2, 2, 0, "air")
+    t.set(2, 3, 0, "air")
+    t.set(1, 2, 2, "red_bed[facing=south,occupied=false,part=foot]")
+    t.set(1, 2, 3, "red_bed[facing=south,occupied=false,part=head]")
+    for y in range(2, 6):
+        t.set(3, y, 2, "ladder[facing=west]")
+    for i, x in enumerate(range(5, 9)):
+        for y in range(1, 5 - i):
+            t.set(x, y, 2, "stone")
+    t.entities.append((2.5, 2.0, 2.5, {"id": "minecraft:villager", "Tags": [inh.TAG]}))
+    return t
+
+
+def test_a_medium_structure_stands_with_its_layer_0_at_the_ground(reg):
+    """A start piece has its layer 0 where the terrain's top block was (mediums/_paths.START_BASE, measured in a world by
+    tools/probes/wground.py), so a villager outside it has its feet at y = 1 (#86). Modelled on ground a block lower,
+    as it was, the lodge's doorstep is a step of 2 and a villager who climbs the ladder and takes the steps down
+    outside never gets back in. No inhabited template changes with it (0 stranded, the same traps)."""
+    from mediums import _paths
+    assert _paths.stranded(_lodge()) == []
+    assert _paths.START_BASE == 1
+    assert _paths.Ground(_lodge(), base=0).floor(2, 0, -1) == 0.0, "the old ground, a block below the foundation"

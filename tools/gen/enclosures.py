@@ -67,11 +67,12 @@ def shut_in(t):
         return []
     if not any(_name(st).endswith("_fence_gate") and "open=true" not in st for st, _ in t.blocks.values()):
         return []
-    g = P.Ground(t, margin=MARGIN)
+    from ladders import level
+    g = P.Ground(t, margin=MARGIN, base=level(t))
     out = [c for c in spawns(t, g) if not gets_out(g, c)]
     if not out:
         return []
-    go = P.Ground(opened(t), margin=MARGIN)
+    go = P.Ground(opened(t), margin=MARGIN, base=level(t))
     return [c for c in out if gets_out(go, c)]
 
 
