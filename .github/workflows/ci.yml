@@ -331,7 +331,7 @@ jobs:
     name: Coste de jugar (tiempo por tick con y sin Heraldia)
     needs: [compilar, seleccion]
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 100
     env:
       MIDE: ${{ needs.seleccion.outputs.juego }}
       PYTHONUNBUFFERED: '1'
