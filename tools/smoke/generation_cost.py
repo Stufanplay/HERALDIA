@@ -32,6 +32,8 @@ import argparse, json, math, os, queue, re, shutil, statistics, subprocess, sys,
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import server_smoke as s
 import modrinth
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))   # tools/, last: it holds a test.py
+import cost_status                  # noqa: E402  (tools/cost_status.py: estado.json and progreso.log in --output)
 
 REFERENCE = os.path.join(s.ROOT, "tools", "smoke", "cost_reference.json")
 SEED = "heraldia"
@@ -719,16 +721,20 @@ def sweep(work, jar, with_it, launcher):
     threading.Thread(target=s.reader, args=(proc, lines), daemon=True).start()
     ctx = s.Context(proc, lines, seen)
     measurements = {"con": with_it}
+    label = "with" if with_it else "without"
     try:
+        cost_status.phase(f"pass {label} Heraldia: starting the server")
         s.wait_for(lines, r"Done \([\d.,]+s\)!", s.START_TIMEOUT_S, seen)
         if with_it and "Heraldia: perfil de la generación activado" not in ctx.log():
             raise SystemExit("with Heraldia but without its profile: was the mod not loaded?")
         if not with_it and re.search(r"Heraldia: \d+ estructuras registradas", ctx.log()):
             raise SystemExit("the pass without Heraldia loaded Heraldia")
+        cost_status.phase(f"pass {label} Heraldia: warm-up")
         chunky(ctx, *WARMUP)
         ctx.run("jfr start", r"[Ss]tarted flight recorder|JFR profiling started|already")
         seconds, cpu = 0.0, 0.0
         for name, x, z, r in ZONES:
+            cost_status.phase(f"pass {label} Heraldia: zone {name}")
             c0 = process_cpu(proc.pid)
             n, t = chunky(ctx, name, x, z, r)
             c1 = process_cpu(proc.pid)
@@ -738,12 +744,14 @@ def sweep(work, jar, with_it, launcher):
                 raise SystemExit(f"Chunky generated {n} chunks at {name}; the measured zone has {(c[2] - c[0] + 1) * (c[3] - c[1] + 1)}")
             seconds += t
         name, x, z, rx, rz = STRIP
+        cost_status.phase(f"pass {label} Heraldia: strip {name}")
         c0 = process_cpu(proc.pid)
         n, strip_s = chunky(ctx, name, x, z, rx, rz)
         c1 = process_cpu(proc.pid)
         if n != box_chunks(chunks_of_rect(x, z, rx, rz)):
             raise SystemExit(f"Chunky generated {n} chunks in the strip; it has {box_chunks(chunks_of_rect(x, z, rx, rz))}")
         strip_cpu = None if c0 is None or c1 is None else c1 - c0
+        cost_status.phase(f"pass {label} Heraldia: jfr stop and /locate")
         m = ctx.run("jfr stop", _JFR_END.pattern)
         fname = os.path.join(work, m.group(1))
         summary = s.wait_for(lines, _JFR_SUMMARY.pattern, 120, seen)
@@ -760,12 +768,14 @@ def sweep(work, jar, with_it, launcher):
                 measurements["locate_ms"][name] = ms
     finally:
         if proc.poll() is None:
+            cost_status.note("stopping the server")
             try:
                 s.send(proc, "stop")
                 proc.wait(timeout=180)
             except (subprocess.TimeoutExpired, BrokenPipeError):
                 proc.kill()
     s.pending(lines, seen)       # what the server wrote when stopping (Heraldia's profile is in there)
+    cost_status.phase(f"pass {label} Heraldia: reading the .jfr")
     log = os.path.join(work, "logs", "latest.log")
     text = open(log, encoding="utf-8", errors="replace").read() if os.path.isfile(log) else "".join(seen)
     measurements["perfil"] = last_profile(text) if with_it else None
@@ -826,12 +836,41 @@ def measure(jar, work, sweeps, profile=None, variants=None):
     modrinth.install(work, ["chunky"])
     sin, with_it = [], [[] for _ in (variants or [None])]
     for i in range(sweeps):
-        sin.append(sweep(work, jar, False, launcher))
+        sin.append(kept_sweep(work, jar, False, launcher))
         for j, v in enumerate(variants or [None]):
             with open(os.path.join(work, "config", "heraldia.json"), "w") as f:   # the server rewrites it at every start
                 json.dump(config_of(profile, v), f)
-            with_it[j].append(sweep(work, jar, True, launcher))
+            with_it[j].append(kept_sweep(work, jar, True, launcher))
     return sin, (with_it if variants else with_it[0])
+
+
+OUTPUT = None        # --output: where each pass's server log and the passes measured so far are kept as they finish
+_passes = 0
+_measured = {"sin": [], "con": []}   # every pass of this run, both rounds (measure() starts its lists afresh on a retry)
+
+
+def kept_sweep(work, jar, with_it, launcher):
+    """sweep(), keeping in OUTPUT what a run that dies later would otherwise lose: this pass's server log (the next pass
+    deletes it), logs/pasada-NN-<con|sin>.log, and every pass measured so far in either round, coste_generacion.parcial.json."""
+    global _passes
+    _passes += 1
+    n, label = _passes, "con" if with_it else "sin"
+    cost_status.phase(f"pass {n} ({label} Heraldia)")
+    try:
+        m = sweep(work, jar, with_it, launcher)
+    finally:
+        if OUTPUT:
+            log = os.path.join(work, "logs", "latest.log")
+            if os.path.isfile(log):
+                os.makedirs(os.path.join(OUTPUT, "logs"), exist_ok=True)
+                shutil.copy(log, os.path.join(OUTPUT, "logs", f"pasada-{n:02d}-{label}.log"))
+    _measured[label].append(m)
+    if OUTPUT:
+        with open(os.path.join(OUTPUT, "coste_generacion.parcial.json"), "w", encoding="utf-8") as f:
+            json.dump(_measured, f, ensure_ascii=False, indent=1, default=list)
+    cost_status.phase(f"pass {n} ({label} Heraldia) measured",
+                      f"CPU {_f(m.get('cpu_ms_por_chunk'))} ms per chunk, {m['chunks']} chunks in {m['segundos']:.1f} s")
+    return m
 
 
 def result_of(sin, with_it):
@@ -888,8 +927,11 @@ def main(argv=None):
                     help="measured zones: estandar (the reference's) or medianas (four large squares on open land, to compare "
                          "medium-structure densities)")
     a = ap.parse_args(argv)
+    global ZONES, OUTPUT
+    if not a.from_json:
+        OUTPUT = os.path.abspath(a.output)
+        cost_status.start(OUTPUT, "coste")
     ref = read_reference(a.reference)
-    global ZONES
     ZONES = LAYOUTS[a.zones]
     if a.variant:
         if not a.jar:
@@ -904,6 +946,7 @@ def main(argv=None):
         with open(os.path.join(a.output, "coste_variantes.md"), "w", encoding="utf-8") as f:
             f.write(md)
         print(md)
+        cost_status.finish(True, f"{len(results)} variants measured (no threshold)")
         return 0
 
     def decide(res, ref):
@@ -921,7 +964,9 @@ def main(argv=None):
         res = result_of(sin, with_it)
         res["perfil_medido"] = a.profile or "estandar"
         comp = decide(res, ref)
+        cost_status.phase(f"first round compared: {comp[2]}; {comp[4]}")
         if not (comp[0] and comp[3]) and ref and not a.no_retry and not a.update_reference:
+            cost_status.phase("over the limit: a second round of passes")
             print(f"{comp[2]}; {comp[4]}: a round of {a.sweeps} passes is repeated and the decision is made with all of them", flush=True)
             without_it2, with_it2 = measure(jar, work, a.sweeps, a.profile)
             res = result_of(sin + without_it2, with_it + with_it2)
@@ -937,8 +982,9 @@ def main(argv=None):
     print(md)
     print("COSTE:", comp[2])
     print("PICOS:", comp[4])
+    cost_status.finish(comp[0] and comp[3], f"{comp[2]}; {comp[4]}")
     return 0 if (comp[0] and comp[3]) or a.no_threshold else 1
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(cost_status.guard(main))

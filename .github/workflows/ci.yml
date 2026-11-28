@@ -36,6 +36,8 @@ jobs:
       hay: ${{ steps.sel.outputs.hay }}
       coste: ${{ steps.sel.outputs.coste }}
       juego: ${{ steps.sel.outputs.juego }}
+      coste_razon: ${{ steps.sel.outputs.coste_razon }}
+      juego_razon: ${{ steps.sel.outputs.juego_razon }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -72,11 +74,13 @@ jobs:
           else
             m=$(python3 tools/test.py --ci-matrix --base "$BASE")
           fi
-          echo "$m" | python3 -c 'import json,sys; m=json.load(sys.stdin); print("Batería completa" if m["full"] else "Pruebas afectadas"); [print(" -", g["tests"]) for g in m["include"]]; print("Coste de generación:", "sí" if m["cost"] else "no")'
+          echo "$m" | python3 -c 'import json,sys; m=json.load(sys.stdin); print("Batería completa" if m["full"] else "Pruebas afectadas"); [print(" -", g["tests"]) for g in m["include"]]; print("Coste de generación:", "sí" if m["cost"] else "no", "-", m["cost_reason"]); print("Coste de jugar:", "sí" if m["runtime"] else "no", "-", m["runtime_reason"])'
           echo "matriz=$(echo "$m" | python3 -c 'import json,sys; m=json.load(sys.stdin); print(json.dumps({"include": m["include"]}))')" >> "$GITHUB_OUTPUT"
           echo "hay=$(echo "$m" | python3 -c 'import json,sys; print("true" if json.load(sys.stdin)["include"] else "false")')" >> "$GITHUB_OUTPUT"
           echo "coste=$(echo "$m" | python3 -c 'import json,sys; print("true" if json.load(sys.stdin)["cost"] else "false")')" >> "$GITHUB_OUTPUT"
           echo "juego=$(echo "$m" | python3 -c 'import json,sys; print("true" if json.load(sys.stdin)["runtime"] else "false")')" >> "$GITHUB_OUTPUT"
+          echo "coste_razon=$(echo "$m" | python3 -c 'import json,sys; print(json.load(sys.stdin)["cost_reason"])')" >> "$GITHUB_OUTPUT"
+          echo "juego_razon=$(echo "$m" | python3 -c 'import json,sys; print(json.load(sys.stdin)["runtime_reason"])')" >> "$GITHUB_OUTPUT"
 
   compilar:
     name: Compilación (genera, valida, audita y JUnit)
@@ -240,26 +244,44 @@ jobs:
           path: build/logs-pruebas
           if-no-files-found: ignore
 
+  # El job corre siempre que corran compilar y seleccion, también cuando la selección dice que no hace falta medir: entonces
+  # no mide, lo dice (la razón, en la anotación y en el resumen) y sale en verde. Así un job saltado por ruta, uno que midió
+  # y uno que arrancó y murió se leen distinto desde fuera: su último paso (Veredicto, tools/cost_status.py) deja UNA
+  # anotación «COST-VERDICT coste MEASURED|SKIPPED|DIED» en el check run, y un check run terminado sin ella es que el runner
+  # se perdió antes de llegar ahí. Para leerlo sin bajar nada: python3 tools/cost_status.py ci --repo OWNER/REPO --sha SHA.
+  # El nombre es fijo: con un sufijo calculado de `needs`, GitHub lo dejaba sin evaluar cuando seleccion fallaba (PR #157,
+  # run 46090363301), y una regla de rama que exija el check por su nombre no lo habría encontrado.
   coste:
     name: Coste de generación (con y sin Heraldia)
     needs: [compilar, seleccion]
-    if: needs.seleccion.outputs.coste == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      MIDE: ${{ needs.seleccion.outputs.coste }}
+      PYTHONUNBUFFERED: '1'        # la salida llega al log del job según se escribe, no al vaciarse el búfer (se perdía al matarlo)
     steps:
       - uses: actions/checkout@v4
 
+      - name: Saltado por ruta
+        if: env.MIDE == 'false'
+        env:
+          RAZON: ${{ needs.seleccion.outputs.coste_razon }}
+        run: python3 tools/cost_status.py skip --job coste --output build/coste --reason "$RAZON"
+
       - uses: ./.github/actions/preparar
+        if: env.MIDE == 'true'
         with:
           gradle: 'false'
 
       - uses: actions/download-artifact@v4
+        if: env.MIDE == 'true'
         with:
           name: jar
           path: build/libs
 
       # Chunky (tools/smoke/modrinth.py), con su sha512
       - uses: actions/cache@v4
+        if: env.MIDE == 'true'
         with:
           path: build/smoke/modrinth
           key: modrinth-${{ hashFiles('tools/smoke/modrinth.py') }}-coste
@@ -268,44 +290,74 @@ jobs:
             modrinth-
 
       # Misma zona del mismo mundo con y sin Heraldia (3 pasadas de cada); compara con tools/smoke/cost_reference.json
-      # y escribe el resumen del job. Para actualizar la referencia con esta medición: docs/DEVELOPMENT.md.
+      # y escribe el resumen del job. Para actualizar la referencia con esta medición: docs/DEVELOPMENT.md. Desde su
+      # arranque escribe build/coste/estado.json y progreso.log, el log de cada pasada (logs/) y las pasadas ya medidas
+      # (coste_generacion.parcial.json): lo que haya hecho queda aunque lo maten.
       - name: Coste de generación
+        id: medir
+        if: env.MIDE == 'true'
         run: python3 tools/smoke/generation_cost.py --jar build/libs/heraldia-${{ needs.compilar.outputs.version }}.jar --work "$GITHUB_WORKSPACE/build/smoke" --output build/coste
 
+      # Antes era `cp ... 2>/dev/null || true`: si el job moría antes de crear build/coste, el cp fallaba en silencio, el paso
+      # salía en verde y no se subía nada (CI 44965032309, juego muerto en 18 s). Ahora dice qué rescata, o falla a la vista.
       - name: Log del servidor
+        if: always() && env.MIDE == 'true'
+        run: |
+          mkdir -p build/coste
+          if [ -f build/smoke/logs/latest.log ]; then
+            cp build/smoke/logs/latest.log build/coste/
+            echo "rescued build/smoke/logs/latest.log ($(wc -l < build/smoke/logs/latest.log) lines) into build/coste/"
+          else
+            echo "::error title=Log del servidor::no server log to rescue: build/smoke/logs/latest.log does not exist (the server never started)"
+            exit 1
+          fi
+
+      - name: Veredicto
         if: always()
-        run: cp build/smoke/logs/latest.log build/coste/ 2>/dev/null || true
+        run: python3 tools/cost_status.py verdict --job coste --output build/coste --step-outcome "${{ steps.medir.outcome }}"
 
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: always() && env.MIDE == 'true'
         with:
           name: coste-generacion
           path: build/coste
-          if-no-files-found: ignore
+          if-no-files-found: error      # build/coste always holds at least estado.json or veredicto.txt
           retention-days: 30
 
   # Coste de jugar (tools/smoke/runtime_cost.py): tiempo por tick con jugadores simulados en aldeas, la arena y una caravana,
   # con y sin Heraldia, y el margen de aldeanos; compara con tools/smoke/runtime_reference.json (docs/DEVELOPMENT.md).
+  # Como «coste»: corre siempre, mide sólo si la selección lo pide y su último paso deja una anotación COST-VERDICT juego.
   juego:
     name: Coste de jugar (tiempo por tick con y sin Heraldia)
     needs: [compilar, seleccion]
-    if: needs.seleccion.outputs.juego == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    env:
+      MIDE: ${{ needs.seleccion.outputs.juego }}
+      PYTHONUNBUFFERED: '1'
     steps:
       - uses: actions/checkout@v4
 
+      - name: Saltado por ruta
+        if: env.MIDE == 'false'
+        env:
+          RAZON: ${{ needs.seleccion.outputs.juego_razon }}
+        run: python3 tools/cost_status.py skip --job juego --output build/juego --reason "$RAZON"
+
       - uses: ./.github/actions/preparar
+        if: env.MIDE == 'true'
         with:
           gradle: 'false'
 
       - uses: actions/download-artifact@v4
+        if: env.MIDE == 'true'
         with:
           name: jar
           path: build/libs
 
       # Chunky y Carpet (tools/smoke/modrinth.py), con su sha512
       - uses: actions/cache@v4
+        if: env.MIDE == 'true'
         with:
           path: build/smoke/modrinth
           key: modrinth-${{ hashFiles('tools/smoke/modrinth.py') }}-juego
@@ -314,16 +366,32 @@ jobs:
             modrinth-
 
       - name: Coste de jugar
+        id: medir
+        if: env.MIDE == 'true'
         run: python3 tools/smoke/runtime_cost.py --jar build/libs/heraldia-${{ needs.compilar.outputs.version }}.jar --work "$GITHUB_WORKSPACE/build/smoke" --output build/juego
 
+      # Antes era `cp ... 2>/dev/null || true`: si el job moría antes de crear build/juego, el cp fallaba en silencio, el paso
+      # salía en verde y no se subía nada (CI 44965032309, juego muerto en 18 s). Ahora dice qué rescata, o falla a la vista.
       - name: Log del servidor
+        if: always() && env.MIDE == 'true'
+        run: |
+          mkdir -p build/juego
+          if [ -f build/smoke/logs/latest.log ]; then
+            cp build/smoke/logs/latest.log build/juego/
+            echo "rescued build/smoke/logs/latest.log ($(wc -l < build/smoke/logs/latest.log) lines) into build/juego/"
+          else
+            echo "::error title=Log del servidor::no server log to rescue: build/smoke/logs/latest.log does not exist (the server never started)"
+            exit 1
+          fi
+
+      - name: Veredicto
         if: always()
-        run: cp build/smoke/logs/latest.log build/juego/ 2>/dev/null || true
+        run: python3 tools/cost_status.py verdict --job juego --output build/juego --step-outcome "${{ steps.medir.outcome }}"
 
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: always() && env.MIDE == 'true'
         with:
           name: coste-juego
           path: build/juego
-          if-no-files-found: ignore
+          if-no-files-found: error      # build/juego always holds at least estado.json or veredicto.txt
           retention-days: 30
