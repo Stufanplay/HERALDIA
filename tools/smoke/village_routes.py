@@ -242,7 +242,7 @@ def shut_in(world_dir, pos):
 
 def remove_bells(ctx, sites):
     """--fault bells: every bell of the placed villages becomes air."""
-    ctx.run("gamerule max_block_modifications 4000000", r"Gamerule|set|now")
+    ctx.run("gamerule max_block_modifications 4000000", r"Gamerule|set")
     gone = 0
     for _, x, z in sites:
         for x0, x1 in ((x - RADIUS, x - 1), (x, x + RADIUS - 1)):
@@ -305,7 +305,7 @@ def main():
         s.wait_for(lines, r"Heraldia: (\d+) estructuras registradas", s.START_TIMEOUT_S, seen)
         for cmd in ("difficulty peaceful", "gamerule advance_weather false", "weather clear", "gamerule spawn_mobs false",
                     "gamerule advance_time false", "time set 0"):
-            ctx.run(cmd, r"Set|set|Changed|changed|Gamerule|now|weather|difficulty|already")
+            ctx.run(cmd, r"Set|set|Changed|changed|Gamerule|weather|difficulty|already")
         sites = natural_sites(ctx, a.natural) if a.natural else SITES[:a.sites]
         if a.structures and not a.natural:
             sites = [(sid, x, z) for sid, (_, x, z) in zip(a.structures.split(","), SITES)]
@@ -326,7 +326,7 @@ def main():
             print(f"RUTAS: FAULT INJECTED: {gone} bells removed")
             if not gone:
                 fails.append("--fault bells removed no bell: the fault was not injected")
-        ctx.run("gamerule advance_time true", r"Gamerule|set|now")
+        ctx.run("gamerule advance_time true", r"Gamerule|set")
         ctx.run(f"tick rate {TICK_RATE}", r"rate|Set|set")
         start = ctx.gametime()
         wait_daytime(ctx, SETTLE_UNTIL, start)

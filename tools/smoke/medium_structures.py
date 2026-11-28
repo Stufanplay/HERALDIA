@@ -433,7 +433,7 @@ def main():
             if not m or f"candidata en el bioma #heraldia:medianas/{mid}" not in remainder \
                     or (int(neighbors.group(1)) if neighbors else None) != (vec if vec and vec != 6 else None):
                 fails.append(f"the log is missing the grid of medianas/{mid} (every {sp} chunks, bioma_vecinos {vec}): {remainder}")
-        ctx.run("gamerule spawn_mobs false", r"Gamerule|set to|now")
+        ctx.run("gamerule spawn_mobs false", r"Gamerule|set to")
         fails += check_templates(ctx, ts)
         fails += check_structures(ctx)
         fails += check_loot(ctx)

@@ -253,7 +253,7 @@ def phase_old(a, p):
         if not p.check(ctx.until(f"execute if entity @a[name={hs.P}]"), "Carpet's player does not appear"):
             return None
         ctx.run(f"tp {hs.P} {x} {y} {z}", r"Teleported|Unknown")
-        ctx.run(f"execute as {hs.P} run heraldia herald place here", r"heraldia|Herald|Heraldo|place|confirm")
+        ctx.run(f"execute as {hs.P} run heraldia herald place here", r"heraldia|Herald|Heraldo|confirm")
         ctx.run(f"execute as {hs.P} run heraldia herald place confirm", r"Building the Herald's House|Construyendo la Casa del Heraldo")
         m = p.wait_log(hs.PLACED, 900)
         if not p.check(m, "the town is not placed"):

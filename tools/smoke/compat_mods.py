@@ -197,7 +197,7 @@ def force(ctx, x, z, r):
         if not ctx.until(f"execute if loaded {ex} 64 {ez}", timeout=CHUNKY_TIMEOUT_S):
             raise SystemExit(f"forceload no carga {ex}, {ez}")
     t = time.monotonic() - t0
-    ctx.run(f"forceload remove {x - r} {z - r} {x + r} {z + r}", r"Unmarked|force|not")
+    ctx.run(f"forceload remove {x - r} {z - r} {x + r} {z + r}", r"Unmarked|force")
     side = (x + r) // 16 - (x - r) // 16 + 1
     return side * side, t
 
@@ -256,7 +256,7 @@ def main(argv=None):
         elif not s.guardian_placed(ctx, PLACE):
             fails.append(f"{PLACE}: its guardian does not appear")
         ctx.run(f"forceload remove {PLACE_AT[0] - PLACE_R} {PLACE_AT[1] - PLACE_R} {PLACE_AT[0] + PLACE_R} {PLACE_AT[1] + PLACE_R}",
-                r"Unmarked|force|not")
+                r"Unmarked|force")
         before = len("".join(seen))
         total_chunks, total_s = 0, 0.0
         for name, (x, z) in zones:

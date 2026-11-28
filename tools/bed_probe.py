@@ -56,8 +56,8 @@ def main():
     results = []
     try:
         s.wait_for(lines, r"Heraldia: (\d+) estructuras registradas", s.START_TIMEOUT_S, seen)
-        ctx.run("gamerule spawn_mobs false", r"Gamerule|set to|now")
-        ctx.run("gamerule advance_time false", r"Gamerule|set to|now")
+        ctx.run("gamerule spawn_mobs false", r"Gamerule|set to")
+        ctx.run("gamerule advance_time false", r"Gamerule|set to")
         for i in range(0, len(trials), a.batch):
             results += run_batch(ctx, ts, trials[i:i + a.batch], a)
             json.dump(results, open(a.out, "w"), indent=1)
@@ -79,7 +79,7 @@ def reader(proc, lines, work):
 
 def run_stay(ctx, slots, a):
     """--stay: the inhabitants live in their copy for a.stay days with the clock running; where are they at the end?"""
-    ctx.run("gamerule advance_time true", r"Gamerule|set to|now")
+    ctx.run("gamerule advance_time true", r"Gamerule|set to")
     ctx.run("time set 1000", r"Set the time|time to|Set minecraft:\w+ to|already set")
     t0 = ctx.gametime()
     ms.sprint(ctx, int(a.stay * 24000) + 13000 - 1000)        # ends at nightfall (13000)
