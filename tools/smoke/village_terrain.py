@@ -561,18 +561,24 @@ def parent_of(pieces, i):
     return None
 
 
-def fit_figures(blocks, pieces, bad_doors=None, highest=None):
+def fit_figures(blocks, pieces, bad_doors=None, highest=None, street_top=None):
     """(graded points ok, total), (doors ok, total), natural trunks on the pieces. A door is read with `street_step`:
     it fits when the column one step into the piece it hangs from holds some walkable ground within a step of the door's
     floor row (#96, the owner's rule). With `bad_doors` (a list), each door that misses is appended to it: (piece, its
     box, the column measured, the step, what was read there). With `highest` (a dict), the same doors
-    read with `ground` (the highest block of the street column, what the test read until Nov 2026) go into it as ok,
-    n and bad: an informative figure, which the test prints and never compares."""
+    read with `ground` (the highest block of the street column, what the test read until #93) go into it as ok,
+    n and bad: an informative figure, which the test prints and never compares. With `street_top` (a dict), the same
+    doors read as `street_ground` alone read them -- the highest ground of the column that is not inside another rigid
+    piece's box, which is what the gate compared from #93 until the owner's rule (#96) -- go into it the same way.
+    Three readings of one world side by side, two of them informative: what each one says apart is what tells a change
+    of instrument from a change of village, on the same saved world and without generating it twice."""
     g_ok = g_n = d_ok = d_n = 0
     boxes = [p["bb"] for p in pieces]
     rigid = [p["bb"] for p in pieces if p["proj"] == "rigid"]
     if highest is not None:
         highest.update(ok=0, n=0, bad=[])
+    if street_top is not None:
+        street_top.update(ok=0, n=0, bad=[])
     for i, p in enumerate(pieces):
         bb = p["bb"]
         # grading points: junctions of a piece inside its own footprint with no height difference (a joint's junction lies
@@ -609,6 +615,15 @@ def fit_figures(blocks, pieces, bad_doors=None, highest=None):
         d_ok += ok
         if not ok and bad_doors is not None:
             bad_doors.append((p["loc"], bb, (cx, cz), step, read))
+        if street_top is not None:
+            # the gate of #93: the highest ground of the column outside any other rigid piece's box, with no headroom
+            # asked for. `street_step` already read it into `read`, so this costs nothing but the comparison.
+            ty = read["y"]
+            ok_t = ty is not None and abs(ty + 1 - bb[1]) <= 1
+            street_top["n"] += 1
+            street_top["ok"] += ok_t
+            if not ok_t:
+                street_top["bad"].append((p["loc"], bb, (cx, cz), None if ty is None else bb[1] - (ty + 1)))
         if highest is not None:
             hh = ground(blocks, jx + dx, jz + dz, bb[1] + 8)
             ok_h = hh is not None and abs(hh + 1 - bb[1]) <= 1
@@ -671,14 +686,16 @@ def terrain_fit(jar, work, fails, measure, seed=FIT_SEED):
     world = os.path.join(work, "world")
     sid, pieces = start_pieces(world, x, z)
     blocks = read_blocks(world, x - FIT_RADIUS - 16, z - FIT_RADIUS - 16, x + FIT_RADIUS + 16, z + FIT_RADIUS + 16)
-    bad, highest = [], {}
-    (g_ok, g_n), (d_ok, d_n), trunks = fit_figures(blocks, pieces, bad, highest)
+    bad, highest, street_top = [], {}, {}
+    (g_ok, g_n), (d_ok, d_n), trunks = fit_figures(blocks, pieces, bad, highest, street_top)
     print(f"fit: seed {seed}: {sid} at {x} {z}: {len(pieces)} pieces; ground at {g_ok} of {g_n} grading points; "
           f"{d_ok} of {d_n} doors within a step of their street; {trunks} natural trunks on the pieces")
     share = lambda a, n: f"{a / n:.3f}" if n else "-"
-    print(f"fit: doors within a step: {d_ok} of {d_n} ({share(d_ok, d_n)}, the gate: the street under any piece on it) "
+    print(f"fit: doors within a step: {d_ok} of {d_n} ({share(d_ok, d_n)}, the gate: some walkable ground of the column "
+          f"within a step of the door) | {street_top['ok']} of {street_top['n']} ({share(street_top['ok'], street_top['n'])}, "
+          f"the highest ground outside another piece's box, the gate of #93, informative) "
           f"| {highest['ok']} of {highest['n']} ({share(highest['ok'], highest['n'])}, the highest block of the street "
-          f"column, informative: compared with nothing)")
+          f"column, the gate before #93, informative: neither is compared with anything)")
     # every door that misses, by name: a count alone cannot tell one mechanism from four accidents
     for loc, bb, (cx, cz), step, read in bad:
         print(f"fit:   door off its street: {loc} box {bb} street column ({cx}, {cz}) "

@@ -206,3 +206,21 @@ def test_a_flower_or_grass_over_the_paving_is_still_room_to_stand():
         blocks[(4, 11, -2)] = over
         assert vt.walkable_surfaces(blocks, 4, -2, 18, []) == [9], over
         assert _doors(blocks, [HOUSE]) == ((1, 1), (1, 1)), over
+
+
+# ---------------------------------------------------------------- three readings of one world, side by side
+def test_the_three_readings_of_a_column_are_reported_apart():
+    """Attributing a change of figure to the instrument or to the village needs the readings apart on the SAME world:
+    the gate (the owner's rule), the gate of #93 (the highest ground outside another piece's box) and the gate before
+    #93 (the highest block of all). The rock ceiling over a walkable street is the case that separates the three: the
+    door fits, and both older readings call it a step."""
+    highest, street_top = {}, {}
+    _, gate, _ = vt.fit_figures(_ceiling(), [HOUSE], None, highest, street_top)
+    assert gate == (1, 1)
+    assert (street_top["ok"], street_top["n"]) == (0, 1)
+    assert (highest["ok"], highest["n"]) == (0, 1)
+    assert street_top["bad"][0][3] == -9 and highest["bad"][0][3] == -9
+    # and on a plain street the three agree
+    highest, street_top = {}, {}
+    _, gate, _ = vt.fit_figures(_street(), [HOUSE], None, highest, street_top)
+    assert gate == (1, 1) and street_top["ok"] == 1 and highest["ok"] == 1
