@@ -286,3 +286,35 @@ def test_a_logged_line_counts_when_ok_asks_for_it():
     """Like the mod's own lines: a caller that waits for a WARN or ERROR line on purpose still gets it."""
     m = _answer([MOJANG_ERROR], "player Revisor spawn at 0 100 0", r"Got an error with a html body", s.run)
     assert m.string == MOJANG_ERROR
+
+
+# Verbatim from a 26.3 server, with and without Carpet, same .jar.
+CARPET_HERE = "[02:04:47] [Server thread/INFO]: System chat: Can only manipulate existing players\n"
+CARPET_ABSENT = "[02:32:20] [Server thread/INFO]: System chat: Unknown or incomplete command. See below for error\n"
+
+
+class _Ctx:
+    """A Context-like object over `_Server`: `require_carpet` only needs `.run` and somewhere to remember."""
+
+    def __init__(self, reply):
+        import queue
+        self.lines, self.seen = queue.Queue(), []
+        self.server = _Server(self.lines, reply)
+
+    def run(self, cmd, ok):
+        return s.run(self.server, self.lines, self.seen, cmd, ok)
+
+
+def test_require_carpet_passes_with_carpet_and_asks_once():
+    ctx = _Ctx(CARPET_HERE)
+    s.require_carpet(ctx)
+    s.require_carpet(ctx)
+    assert ctx.server.sent == [s.CARPET_PROBE + "\n"], "it asks once per server, then remembers"
+
+
+def test_require_carpet_stops_the_test_and_says_where_carpet_is_missing():
+    with pytest.raises(SystemExit) as e:
+        s.require_carpet(_Ctx(CARPET_ABSENT))
+    msg = str(e.value)
+    assert "Carpet is not loaded" in msg and "mods/" in msg and "Unknown or incomplete command" in msg
+

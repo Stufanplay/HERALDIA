@@ -223,7 +223,7 @@ def main():
     try:
         me.freeze(ctx)
         n0 = len(ctx.seen)
-        ctx.run("heraldia update analyze", r"Analizando|Analysing|Unknown|Incorrect")
+        ctx.run("heraldia update analyze", r"Analizando|Analysing")
         m = up.wait_since(ctx, n0, r"update analyze: (\d+) chunks, (\d+) construcciones, (\d+) protegidos, (\d+) vírgenes \((\d+) se "
                           r"regenerarían\), (\d+) estructuras nuevas que colocar \((\d+) sin sitio seguro\)", 600)
         total, built, prot, virg, regen, new, unsafe = (int(m.group(i)) for i in range(1, 8))
@@ -239,7 +239,7 @@ def main():
         diff = me.compare("analyze", before, up.snapshot(world, zone))
         check(not diff, "analyze changed chunks: " + "; ".join(diff[:3]))
         n0 = len(ctx.seen)
-        ctx.run("heraldia update apply", r"Analizando|Analysing|Unknown|Incorrect")
+        ctx.run("heraldia update apply", r"Analizando|Analysing")
         ident = up.wait_since(ctx, n0, r"update apply confirm (\w+) backup", 600).group(1)
         s.send(proc, f"heraldia update apply confirm {ident} backup")
         up.wait_since(ctx, n0, r"update apply confirmado .*el servidor se para", 60)
@@ -304,7 +304,7 @@ def main():
         check(not diff, "apply changed chunks outside the plan: " + "; ".join(diff[:3]))
         print(f"apply: {len(changed)} chunks of the zone changed, {len(changed - allowed)} outside the plan")
         n0 = len(ctx.seen)
-        ctx.run("heraldia update undo", r"update undo confirm|Unknown|Incorrect|No hay")
+        ctx.run("heraldia update undo", r"update undo confirm|No hay")
         m = re.search(r"update undo confirm (\w+)", "".join(ctx.seen[n0:]))
         check(m and m.group(1) == ident, f"undo does not offer the plan {ident}: {m and m.group(0)}")
         s.send(proc, f"heraldia update undo confirm {ident}")

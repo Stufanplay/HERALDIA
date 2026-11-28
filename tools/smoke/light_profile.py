@@ -62,7 +62,7 @@ def main():
         text = answer(ctx, "heraldia config profile ligero", r"profile ligero confirm|Unknown|Incorrect")
         check("seams" in text and "confirm" in text, f"no seam explanation before confirming: {text[-400:]!r}")
         check(read(a.work).get("perfil") == "estandar", "the light profile was saved without confirmation")
-        ctx.run("heraldia config profile ligero confirm", r"configuración recargada|Unknown|Incorrect")
+        ctx.run("heraldia config profile ligero confirm", r"configuración recargada")
         written = read(a.work)
         check(written.get("perfil") == "ligero", f"confirm did not save the light profile: {written.get('perfil')}")
         check("activado" not in written.get("aldeas", {}).get("caminos", {}) and

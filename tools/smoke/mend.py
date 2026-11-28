@@ -249,7 +249,8 @@ def phase_old(a, p):
         ctx.run(f"fill {wx - 6} {top - hs.POND_DEPTH + 1} {z + 12} {wx + 6} {top} {z + 24} minecraft:water", r"filled|Successfully|No blocks")
         ctx.ticks(10)
         ctx.run(f"forceload remove {wx - 24} {z + 2} {wx + 24} {z + 30}", r"[Cc]hunk|unmarked|No")
-        ctx.run(f"player {hs.P} spawn at {x} {y} {z}", r"joined the game|Unknown|Incorrect")
+        s.require_carpet(ctx)
+        ctx.run(f"player {hs.P} spawn at {x} {y} {z}", r"joined the game")
         if not p.check(ctx.until(f"execute if entity @a[name={hs.P}]"), "Carpet's player does not appear"):
             return None
         ctx.run(f"tp {hs.P} {x} {y} {z}", r"Teleported|Unknown")
@@ -262,7 +263,7 @@ def phase_old(a, p):
         ground_y = int(m.group(2))
         if not p.check(p.wait_log(hs.BUILT, 900), "the grounds' build does not finish"):
             return None
-        ctx.run(f"player {hs.P} kill", r"left the game|Unknown|Incorrect")
+        ctx.run(f"player {hs.P} kill", r"left the game")
         # a player's fountain by the town: a source on a pillar, its water running off it (fed: never to be touched)
         fx, fz = box[0] - 20, box[2] + 10
         ctx.run(f"forceload add {fx - 8} {fz - 8} {fx + 8} {fz + 8}", r"[Cc]hunk|marked|already")
@@ -371,7 +372,7 @@ def mend(a, p):
     p.ctx = srv.ctx
     ctx, out = srv.ctx, {}
     try:
-        ctx.run("heraldia update mend scan", r"Looking for|Buscando|Unknown|Incorrect")
+        ctx.run("heraldia update mend scan", r"Looking for|Buscando")
         m = p.wait_log(MEND_DONE, 900)
         if not p.check(m and m.group(1) == "scan", "the scan does not finish"):
             return out
@@ -380,10 +381,10 @@ def mend(a, p):
         # declined: the operator is offered the repair and does not confirm it (the dialog's Cancel only closes it): a
         # scan afterwards finds exactly what the first one found, and the offer's id no longer confirms anything
         k = len(re.findall(MEND_DONE, ctx.log()))
-        ctx.run("heraldia update mend apply all", r"Looking for|Buscando|Unknown|Incorrect")
+        ctx.run("heraldia update mend apply all", r"Looking for|Buscando")
         declined = p.wait_log(CONFIRM, 900)
         ctx.ticks(100)
-        ctx.run("heraldia update mend scan", r"Looking for|Buscando|Unknown|Incorrect")
+        ctx.run("heraldia update mend scan", r"Looking for|Buscando")
         end = time.monotonic() + 900
         while time.monotonic() < end and len(re.findall(MEND_DONE, ctx.log())) < k + 2:
             ctx.ticks(20)
@@ -398,7 +399,7 @@ def mend(a, p):
             p.check(not any(x.group(1) == "apply" for x in re.finditer(MEND_DONE, ctx.log())), "a stale confirmation repaired")
             print("MEND declined and stale confirmations: nothing changed, nothing ran", flush=True)
         n_before = len(re.findall(MEND_DONE, ctx.log()))
-        ctx.run("heraldia update mend apply all", r"Looking for|Buscando|Unknown|Incorrect")
+        ctx.run("heraldia update mend apply all", r"Looking for|Buscando")
         c = None
         end = time.monotonic() + 900
         while time.monotonic() < end and c is None:
@@ -419,7 +420,7 @@ def mend(a, p):
         print(f"MEND {ap[0].group(0)}", flush=True)
         # again: nothing left to do
         k = len(re.findall(MEND_DONE, ctx.log()))
-        ctx.run("heraldia update mend apply all", r"Looking for|Buscando|Unknown|Incorrect")
+        ctx.run("heraldia update mend apply all", r"Looking for|Buscando")
         end = time.monotonic() + 900
         while time.monotonic() < end and len(re.findall(MEND_DONE, ctx.log())) <= k:
             ctx.ticks(20)
