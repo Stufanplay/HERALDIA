@@ -2,7 +2,7 @@
 	"required": true,
 	"package": "io.github.albertosa23.heraldia.mixin",
 	"compatibilityLevel": "JAVA_21",
-	"mixins": ["ArenaBucketMixin", "ArenaEndermanMixin", "ArenaExperienceMixin", "ArenaExplosionMixin", "ArenaPlayerMixin", "ArenaPistonMixin", "ChunkGeneratorClearingMixin", "ChunkGeneratorLocateMixin", "ChunkGeneratorMixin", "CommandsMixin", "CubeMobJumpMixin", "IOWorkerMixin", "DrownedWaterMixin", "DrownedMixin", "DrownedBeachMixin", "PiglinStrollMixin", "PlayerAdvancementsMixin", "RegionFileStorageMixin", "StructureCheckMixin", "VillageClearingMixin", "VillagerPricesMixin", "ZombieEquipmentMixin", "ZombieMixin", "HeraldSpawnMixin", "HeraldFarmlandMixin", "HeraldEndermanMixin", "HeraldLookMenuMixin", "HeraldOpenMenuMixin", "HeraldLookPacketMixin", "HeraldCompoundContainerMixin"],
+	"mixins": ["ArenaBucketMixin", "ArenaEndermanMixin", "ArenaExperienceMixin", "ArenaExplosionMixin", "ArenaPlayerMixin", "ArenaPistonMixin", "ChunkGeneratorClearingMixin", "ChunkGeneratorLocateMixin", "ChunkGeneratorMixin", "CommandsMixin", "CubeMobJumpMixin", "IOWorkerMixin", "DrownedWaterMixin", "DrownedMixin", "DrownedBeachMixin", "PiglinStrollMixin", "PlayerAdvancementsMixin", "RegionFileStorageMixin", "StructureCheckMixin", "VillageClearingMixin", "VillagerLostPoiMixin", "VillagerPricesMixin", "ZombieEquipmentMixin", "ZombieMixin", "HeraldSpawnMixin", "HeraldFarmlandMixin", "HeraldEndermanMixin", "HeraldLookMenuMixin", "HeraldOpenMenuMixin", "HeraldLookPacketMixin", "HeraldCompoundContainerMixin"],
 	"injectors": {
 		"defaultRequire": 1
 	}

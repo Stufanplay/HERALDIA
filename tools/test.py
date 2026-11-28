@@ -30,7 +30,7 @@ NOT_TESTS = {"server_smoke.py", "modrinth.py", "generation_cost.py", "runtime_co
              "saved_world.py", "terrain_traps.py"}  # common modules, the cost
 # ones (their own jobs) and the wayfarers' scenario, which runs inside caravans.py (same server and corridor);
 # saved_world.py reads a saved world's region files for village_routes.py and terrain_traps.py the one-way drops of
-# the terrain round a structure (helpers: no --jar, no server of their own)
+# the terrain round a structure for inhabitant_lost.py (helpers: no --jar, no server of their own)
 # Compatibility with other mods (one test per group, with Modrinth mods): long and with downloads, so in a PR
 # it only runs if the test itself, the mod list or the common placement code changes (what decides where each
 # structure appears and whether it clashes with those of other mods). In the full suite (push to develop, workflow_dispatch, label) always.
@@ -94,6 +94,9 @@ HERALD_STEEP = ["tools/smoke/herald_steep.py"]
 # Look, do not take (herald/HeraldHouse.opened and its mixins): the area's containers as a player who is not an operator.
 HERALD_LOOK = ["tools/smoke/herald_look.py"]
 MEDIUMS = ["tools/smoke/medium_structures.py"]
+# An inhabitant of a medium structure that gets lost in the terrain OUTSIDE it comes home (#91): the one-way drops of
+# the real ground are not in any template audit, so this one goes looking for the trap on the seed's own terrain.
+LOST = ["tools/smoke/inhabitant_lost.py"]
 ADMIN = ["tools/smoke/admin.py"]
 UPDATE = ["tools/smoke/update_check.py"]
 WEB_MAPS = ["tools/smoke/web_maps.py"]
@@ -163,11 +166,13 @@ MAP = [
     ("tools/gen/uniques/_enclosure.py", NETHER_END + OF_EVERY_UNIQUE),
     ("tools/gen/mediums/wizard_hut.py", MEDIUMS_MOBS + HUTS),
     # the model of the villager path search: the mediums' contract and village_routes' "shut in" figure
-    ("tools/gen/mediums/_paths.py", MEDIUMS_MOBS + NETHER_END + ["tools/smoke/village_routes.py"]),
-    ("tools/smoke/saved_world.py", ["tools/smoke/village_routes.py"]),
+    ("tools/gen/mediums/_paths.py", MEDIUMS_MOBS + NETHER_END + LOST + ["tools/smoke/village_routes.py"]),
+    ("tools/smoke/saved_world.py", LOST + ["tools/smoke/village_routes.py"]),
     ("tools/gen/mediums/*", MEDIUMS_MOBS + NETHER_END), (JAVA + "common/MediumStructures.java", MEDIUMS + NETHER_END),
-    # inhabitants of the medium structures: their option, applied when each one first loads
-    (JAVA + "inhabitants/*", MEDIUMS),
+    # inhabitants of the medium structures: their option, applied when each one first loads, and the lost one that is
+    # put back at its bed (the releasePoi mixin); the terrain-trap model the lost test uses to find its trap
+    (JAVA + "inhabitants/*", MEDIUMS + LOST), (JAVA + "mixin/VillagerLostPoiMixin.java", LOST),
+    ("tools/smoke/terrain_traps.py", LOST),
     ("tools/gen/mines/*", MINES), (JAVA + "mines/*", MINES + COAST),
     ("tools/gen/shore/*", COAST_MOBS + AQUATIC), (JAVA + "coast/*", COAST + AQUATIC),
     # /locate of the mines (T36): the shared height cache and the parallel look-ahead computation are only used by the mines
@@ -423,6 +428,11 @@ DURATION_S = {
     "tools/smoke/update_path_b.py": 160,         # five starts, a zone of ~200 chunks, path B and undo
     "tools/smoke/mend.py": 215,                  # CI mode (no --old-jar): three starts, 6 inns and 8 wharfs found and loaded, a declined offer; measured locally (4 cores): 194 s + 10 %
     "tools/smoke/loot_restock.py": 95,             # two starts and a generated hermitage
+    # one start, the hermitage generated and settled, ~262,000 saved blocks walked to find the trap and a sprinted day
+    # (the import of medium_structures builds the whole template registry first). Measured locally (4 cores): 400 s
+    # red (it spends the whole 240 s wait) and 95-180 s green; 600 s red with two other servers on the same machine.
+    # 660 s = the slowest measured + 10 %.
+    "tools/smoke/inhabitant_lost.py": 660,
     "tools/smoke/difficulty.py": 80,                # four starts of the same world
     "tools/smoke/arena.py": 215,                     # two starts, three builds and five waves, and the Herald's House (v2: 18 residents, a market day on its plaza); measured locally (4 cores): 184 s + 10 %
                                                      # (LOCAL measurement, 161 s twice + 10 %: not a CI one; refresh it)
