@@ -202,7 +202,8 @@ def first_start(p, pl, work):
 
     # 3. short time attack: the bell offers the modes
     reap, bell = rel(box, pl, "reaparicion"), rel(box, pl, "campana")
-    ctx.run(f"player {P} spawn at {reap[0] + 0.5} {reap[1]} {reap[2] + 0.5}", r"joined the game|Player .* spawn|Unknown|Incorrect")
+    s.require_carpet(ctx)
+    ctx.run(f"player {P} spawn at {reap[0] + 0.5} {reap[1]} {reap[2] + 0.5}", r"joined the game|Player .* spawn")
     if not ctx.until(f"execute if entity @a[name={P}]"):
         raise SystemExit(f"simulated player {P} does not appear (Carpet)")
     ctx.run(f"gamemode survival {P}", r"Set .* game mode|game mode")
@@ -252,7 +253,8 @@ def first_start(p, pl, work):
             "la supervivencia no acaba al caer el jugador")
     p.check(p.wait_log(rf"arena: marca de {P} en survival: 2 oleadas en \d+ ticks \(puesto 1"), "sin marca de la supervivencia")
     ctx.until(f"execute if entity @a[name={P}]", want=False, timeout=30)
-    ctx.run(f"player {P} spawn at {reap[0] + 0.5} {reap[1]} {reap[2] + 0.5}", r"joined the game|Player .* spawn|Unknown|Incorrect")
+    s.require_carpet(ctx)
+    ctx.run(f"player {P} spawn at {reap[0] + 0.5} {reap[1]} {reap[2] + 0.5}", r"joined the game|Player .* spawn")
     ctx.until(f"execute if entity @a[name={P}]")
 
     # 5. the leaderboard
@@ -332,7 +334,8 @@ def second_start(p, pl, box):
         ctx.ticks(20)
     p.check(ok, "tras reiniciar el cartel del contrarreloj no dice el campeón")
     reap = rel(box, pl, "reaparicion")
-    ctx.run(f"player {P} spawn at {reap[0] + 0.5} {reap[1]} {reap[2] + 0.5}", r"joined the game|Player .* spawn|Unknown|Incorrect")
+    s.require_carpet(ctx)
+    ctx.run(f"player {P} spawn at {reap[0] + 0.5} {reap[1]} {reap[2] + 0.5}", r"joined the game|Player .* spawn")
     if ctx.until(f"execute if entity @a[name={P}]"):
         p.check(ctx.test(f"execute if entity @a[name={P},advancements={{heraldia:arena/campeon_timeattack=true}}]"),
                 "tras reiniciar no conserva el logro de campeón")

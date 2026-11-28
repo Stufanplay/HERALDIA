@@ -138,7 +138,7 @@ class Look:
         self.ctx.run(f"execute as {who} run heraldia choice click {slot} {kind} {button}", r"choice click: slot|unknown input")
 
     def send(self, who, what):
-        self.ctx.run(f"execute as {who} run heraldia choice send {what}", r"choice send: [^\n]*|Unknown|Incorrect")
+        self.ctx.run(f"execute as {who} run heraldia choice send {what}", r"choice send: [^\n]*")
 
 
 def give(ctx, who, item, n=1):
@@ -230,7 +230,8 @@ def run(p, ctx, hp, chests):
     L = Look(p, b)
     spawn = L.w(hp["aparicion"])
     for who in (P, Q):
-        ctx.run(f"player {who} spawn at {spawn[0] + 0.5} {spawn[1]} {spawn[2] + 0.5}", r"joined the game|Player .* spawn|Unknown|Incorrect")
+        s.require_carpet(ctx)
+        ctx.run(f"player {who} spawn at {spawn[0] + 0.5} {spawn[1]} {spawn[2] + 0.5}", r"joined the game|Player .* spawn")
         if not ctx.until(f"execute if entity @a[name={who}]"):
             raise SystemExit(f"simulated player {who} (Carpet) does not appear")
     ctx.ticks(20)                                       # Carpet loads a fake player's data after its JOIN
@@ -341,9 +342,9 @@ def run(p, ctx, hp, chests):
         p.check("raw_gold" in L.data(f"entity {P} EnderItems"), "the ender chest does not take the player's item")
     L.close(P)
     # 6. the option off: the chest stays shut, as before
-    ctx.run("heraldia config set casa_heraldo.contenedores_solo_ver false", r"guardadas por|Valor no válido|Invalid|Unknown|Incorrect")
+    ctx.run("heraldia config set casa_heraldo.contenedores_solo_ver false", r"guardadas por|Valor no válido")
     p.check(not L.open(P, chest), "with the option off the town chest still opens")
-    ctx.run("heraldia config set casa_heraldo.contenedores_solo_ver true", r"guardadas por|Valor no válido|Invalid|Unknown|Incorrect")
+    ctx.run("heraldia config set casa_heraldo.contenedores_solo_ver true", r"guardadas por|Valor no válido")
     p.check(L.open(P, chest) and "look-only" in L.status(P), "with the option on again the town chest is not look-only")
     L.close(P)
     p.check(L.items(chest) == before, "the town chest changed")

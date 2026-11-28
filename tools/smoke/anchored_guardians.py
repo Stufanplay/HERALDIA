@@ -267,7 +267,8 @@ def main():
             """The player, alive (if it died, again), in place and at full health."""
             for _ in range(3):
                 if not ctx.test(f"execute if entity @a[name={PLAYER}]"):
-                    ctx.run(f"player {PLAYER} spawn at {X3 + 0.5} {Y} {Z3 + 0.5}", r"joined the game|Player .* spawn|Unknown|Incorrect")
+                    s.require_carpet(ctx)
+                    ctx.run(f"player {PLAYER} spawn at {X3 + 0.5} {Y} {Z3 + 0.5}", r"joined the game|Player .* spawn")
                     if not ctx.until(f"execute if entity @a[name={PLAYER}]"):
                         raise SystemExit(f"simulated player {PLAYER} does not appear (Carpet)")
                     ctx.run(f"gamemode survival {PLAYER}", r"Set .* game mode|game mode")
@@ -305,7 +306,7 @@ def main():
             ctx.run(f"kill @e[type=!minecraft:player,{zone}]", r"Killed|No entity was found")
             for t in ("vex", "evoker_fangs", "arrow", "trident", "item"):   # vexes pass through the barrier
                 ctx.run(f"kill @e[type=minecraft:{t}]", r"Killed|No entity was found")
-        ctx.run(f"player {PLAYER} kill", r"left the game|Killed|died|No player|Unknown|Incorrect|Can only manipulate")
+        ctx.run(f"player {PLAYER} kill", r"left the game|Killed|died|No player|Can only manipulate")
         ctx.run("forceload remove all", r"Unmarked|Removed|No force|force")
 
         # 4) each guardian's real template (all at once), by day, and again at night those of the drowned (their

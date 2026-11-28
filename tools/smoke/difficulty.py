@@ -192,7 +192,8 @@ def main():
         wait_mobs(ctx)
         names = ["Testigo", "Aprendiz", "Escudero"]
         for i, n in enumerate(names):
-            ctx.run(f"player {n} spawn at {X + i} {Y} {Z + 4}", r"joined the game|Player .* spawn|Unknown|Incorrect")
+            s.require_carpet(ctx)
+            ctx.run(f"player {n} spawn at {X + i} {Y} {Z + 4}", r"joined the game|Player .* spawn")
             check(ctx.until(f"execute if entity @a[name={n}]"), f"no aparece el jugador simulado {n}")
             s.send(srv.proc, f"gamemode creative {n}")  # no reply in the console if it already had it
         ctx.run(f"damage {sel('p_anclado')} 1 minecraft:player_attack by Testigo", r"Applied|damage")
@@ -201,7 +202,7 @@ def main():
         check(vm is not None and abs(vm - 60) < 1e-3, f"con 3 jugadores: vida máxima {vm} (debe ser 60)")
         check(modifier(ctx, "p_anclado", "max_health", "dificultad_jugadores") == 0.5, "con 3 jugadores: el modificador no es 0,5")
         for n in names[1:]:
-            ctx.run(f"player {n} kill", r"left the game|Unknown|Incorrect")
+            ctx.run(f"player {n} kill", r"left the game")
             ctx.until(f"execute if entity @a[name={n}]", want=False)
         ctx.ticks(20)       # after the previous hit's invulnerability (10 ticks): otherwise there is no AFTER_DAMAGE
         ctx.run(f"damage {sel('p_anclado')} 1 minecraft:player_attack by Testigo", r"Applied|damage")

@@ -100,12 +100,13 @@ class WebServer:
         return s.wait_for(self.lines, pattern, timeout, self.seen)
 
     def player(self, name):
-        self.ctx.run(f"player {name} spawn at 0 100 0", r"joined the game|Player .* spawn|Unknown|Incorrect")
+        s.require_carpet(self.ctx)
+        self.ctx.run(f"player {name} spawn at 0 100 0", r"joined the game|Player .* spawn")
         if not self.ctx.until(f"execute if entity @a[name={name}]"):
             raise SystemExit(f"the simulated player {name} does not appear (Carpet)")
 
     def hits(self, name):
-        self.ctx.run(f"player {name} kill", r"left the game|Unknown|Incorrect")
+        self.ctx.run(f"player {name} kill", r"left the game")
         self.ctx.until(f"execute if entity @a[name={name}]", want=False)
 
     def stop(self):

@@ -411,7 +411,8 @@ def main():
         ctx.run(f"fill {wx - 6} {top - POND_DEPTH + 1} {z + 12} {wx + 6} {top} {z + 24} minecraft:water", r"filled|Successfully|No blocks")
         ctx.ticks(10)
         ctx.run(f"forceload remove {wx - 24} {z + 2} {wx + 24} {z + 30}", r"[Cc]hunk|unmarked|No")
-        ctx.run(f"player {P} spawn at {x} {y} {z}", r"joined the game|Unknown|Incorrect")
+        s.require_carpet(ctx)
+        ctx.run(f"player {P} spawn at {x} {y} {z}", r"joined the game")
         if not p.check(ctx.until(f"execute if entity @a[name={P}]"), "Carpet's player does not appear"):
             return 1
         # `place here` builds at the bot's block, and this test's y is 21 blocks above the natural ground (the surface

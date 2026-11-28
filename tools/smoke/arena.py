@@ -192,7 +192,8 @@ def first_start(p, pl):
     ctx.run("heraldia arena", r"Arena de oleadas en|Wave arena at")
 
     # 2. protection
-    ctx.run(f"player {P} spawn at {reap[0] + 0.5} {reap[1]} {reap[2] + 0.5}", r"joined the game|Player .* spawn|Unknown|Incorrect")
+    s.require_carpet(ctx)
+    ctx.run(f"player {P} spawn at {reap[0] + 0.5} {reap[1]} {reap[2] + 0.5}", r"joined the game|Player .* spawn")
     if not ctx.until(f"execute if entity @a[name={P}]"):
         raise SystemExit(f"simulated player {P} does not appear (Carpet)")
     ctx.run(f"gamemode survival {P}", r"Set .* game mode|game mode")
@@ -328,7 +329,8 @@ def first_start(p, pl):
     p.check(ctx.count('@e[type=item,nbt={Item:{id:"minecraft:diamond"}}]') == 0, "suelta sus diamantes al caer en el ruedo")
     p.check(ctx.count(f"@e[type=experience_orb,{nearby_flag}]") <= orbs_before, "suelta experiencia al caer en el ruedo")
     ctx.until(f"execute if entity @a[name={P}]", want=False, timeout=30)
-    ctx.run(f"player {P} spawn at {reap[0] + 0.5} {reap[1]} {reap[2] + 0.5}", r"joined the game|Player .* spawn|Unknown|Incorrect")
+    s.require_carpet(ctx)
+    ctx.run(f"player {P} spawn at {reap[0] + 0.5} {reap[1]} {reap[2] + 0.5}", r"joined the game|Player .* spawn")
     ctx.until(f"execute if entity @a[name={P}]")
     p.check(ctx.test(f'execute if entity @a[name={P},nbt={{Inventory:[{{id:"minecraft:diamond",count:7}}]}}]'),
             "pierde los diamantes al caer en el ruedo")

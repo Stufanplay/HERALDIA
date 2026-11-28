@@ -129,7 +129,8 @@ def main():
         ctx.run(f"fill {x - 4} {y} {z - 4} {x + 12} {y + 4} {z + 4} minecraft:air", r"Successfully filled|No blocks")
         for rule in ("spawn_mobs", "advance_time"):
             ctx.run(f"gamerule {rule} false", rf"[Gg]ame ?rule .*{rule}")
-        ctx.run(f"player {PLAYER} spawn at {x + 2} {y} {z}", r"joined the game|Player .* spawn|Unknown|Incorrect")
+        s.require_carpet(ctx)
+        ctx.run(f"player {PLAYER} spawn at {x + 2} {y} {z}", r"joined the game|Player .* spawn")
         if not ctx.until(f"execute if entity @a[name={PLAYER}]"):
             raise SystemExit(f"simulated player {PLAYER} (Carpet) does not appear")
         s.send(srv.proc, f"gamemode survival {PLAYER}")  # no console response if it already had it
@@ -174,7 +175,8 @@ def main():
         # 3) another player nearby prevents it
         empty(C)
         day()
-        ctx.run(f"player {OTHER_ONE} spawn at {x + 8} {y} {z}", r"joined the game|Player .* spawn|Unknown|Incorrect")
+        s.require_carpet(ctx)
+        ctx.run(f"player {OTHER_ONE} spawn at {x + 8} {y} {z}", r"joined the game|Player .* spawn")
         check(ctx.until(f"execute if entity @a[name={OTHER_ONE}]"), f"no aparece {OTHER_ONE}")
         s.send(srv.proc, f"gamemode survival {OTHER_ONE}")  # no console response if it already had it
         use(C)
@@ -183,7 +185,7 @@ def main():
         ctx.ticks(4)
         use(C)
         check(arrows(C), "con el otro jugador a 100 bloques no se repone")
-        ctx.run(f"player {OTHER_ONE} kill", r"left the game|Unknown|Incorrect")
+        ctx.run(f"player {OTHER_ONE} kill", r"left the game")
 
         # 4) what is not restocked: fixed content, trophy, vanilla
         others = {"fijo": ((x + 4, y, z), 'minecraft:chest{components:{"minecraft:custom_data":{heraldia_cofre_unico:"atlantida"}},'
@@ -243,7 +245,8 @@ def main():
         ctx = srv.ctx
         p = (x, y, z + 2)
         ctx.run(f"forceload add {x - 16} {z - 16} {x + 16} {z + 16}", r"Marked|force|already|[Aa]dded")
-        ctx.run(f"player {PLAYER} spawn at {x + 2} {y} {z + 2}", r"joined the game|Player .* spawn|Unknown|Incorrect")
+        s.require_carpet(ctx)
+        ctx.run(f"player {PLAYER} spawn at {x + 2} {y} {z + 2}", r"joined the game|Player .* spawn")
         ctx.until(f"execute if entity @a[name={PLAYER}]")
         for _ in range(s.PLACE_ATTEMPTS):
             m = ctx.run(f'setblock {at(p)} minecraft:chest{{LootTable:"{TABLE}"}}', r"Changed the block|Could not set|not loaded")

@@ -81,7 +81,8 @@ def main():
         return float(m.group(1)) if m.lastindex and m.group(1) else None
 
     def player(ctx):
-        ctx.run(f"player {PLAYER} spawn at 0 100 0", r"joined the game|Player .* spawn|Unknown|Incorrect")
+        s.require_carpet(ctx)
+        ctx.run(f"player {PLAYER} spawn at 0 100 0", r"joined the game|Player .* spawn")
         if not ctx.until(f"execute if entity @a[name={PLAYER}]"):
             raise SystemExit(f"simulated player {PLAYER} does not appear (Carpet)")
 

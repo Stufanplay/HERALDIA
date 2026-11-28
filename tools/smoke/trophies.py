@@ -81,7 +81,8 @@ def main():
             if "not loaded" not in m.string:
                 break
             time.sleep(s.PLACE_RETRY_S)
-        ctx.run(f"player {PLAYER} spawn at {X} {Y} {Z}", r"joined the game|Player .* spawn|Unknown|Incorrect")
+        s.require_carpet(ctx)
+        ctx.run(f"player {PLAYER} spawn at {X} {Y} {Z}", r"joined the game|Player .* spawn")
         if not until(f"execute if entity @a[name={PLAYER}]"):
             raise SystemExit(f"the simulated player {PLAYER} does not appear (Carpet)")
         ctx.run(f"gamemode survival {PLAYER}", r"Set .* game mode|game mode")

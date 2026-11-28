@@ -299,6 +299,36 @@ def must(proc, lines, seen, cmd, ok):
     return run(proc, lines, seen, cmd, ok)
 
 
+# Carpet's simulated players are what 31 waits of the server tests spawn and kill. Whether Carpet is there is asked once,
+# by the command those waits use, not by the mod list: "- carpet <version>" under "Loading N mods" says the jar was
+# loaded, while this says `/player` exists and answers -- which is also false when Carpet is loaded with the command
+# turned off in its own settings. Read on a 26.3 server with and without Carpet, same .jar: a `player` command on a name
+# that is not online answers "Can only manipulate existing players" with Carpet, and "Unknown or incomplete command. See
+# below for error" without it; it spawns, kills and moves nothing.
+CARPET_PROBE = "player heraldia_no_such_bot kill"
+CARPET_HERE = "Can only manipulate existing players"
+CARPET_ABSENT = "Unknown or incomplete command"
+
+
+def require_carpet(ctx):
+    """Stops the test, saying where Carpet is missing, unless this server knows Carpet's `/player` command.
+
+    Called just before each `player ... spawn`; it sends its probe once per server (it remembers on `ctx`), so a test
+    that spawns in a loop or after a restart pays one command per start. Both replies are listed so the wait ends at
+    once on either, and only Carpet's is accepted: the three-way wait of docs/LESSONS.md. Before it, 31 waits listed
+    `Unknown|Incorrect` in their own `ok` so that a missing Carpet passed for a spawn that worked."""
+    if getattr(ctx, "_carpet_checked", False):
+        return
+    m = ctx.run(CARPET_PROBE, f"{CARPET_HERE}|{CARPET_ABSENT}")
+    if CARPET_HERE not in m.string:
+        test = os.path.basename(sys.argv[0]) or "this test"
+        raise SystemExit(f"{test}: Carpet is not loaded on this server -- `player` is not a command here (it answered "
+                         f"{m.string.strip()!r}). Copy Carpet into the mods/ folder of this test's --work before the "
+                         f"server starts (trophies.CARPET, fetched with terralith_biomes.fetch), and check that Carpet's "
+                         f"settings do not turn `/player` off.")
+    ctx._carpet_checked = True
+
+
 # Condition waits of the server tests: the check is repeated for up to UNTIL_S seconds (generous: CI is
 # slow and writes "Can't keep up!") and passes as soon as it is met. The "wait for time to pass" waits (a circuit
 # must NOT react, a trap has already fired) are counted in game ticks with /time query gametime, not in seconds:
