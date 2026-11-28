@@ -372,7 +372,7 @@ def mend(a, p):
     p.ctx = srv.ctx
     ctx, out = srv.ctx, {}
     try:
-        ctx.run("heraldia update mend scan", r"Looking for|Buscando|Unknown|Incorrect")
+        ctx.run("heraldia update mend scan", r"Looking for|Buscando")
         m = p.wait_log(MEND_DONE, 900)
         if not p.check(m and m.group(1) == "scan", "the scan does not finish"):
             return out
@@ -381,10 +381,10 @@ def mend(a, p):
         # declined: the operator is offered the repair and does not confirm it (the dialog's Cancel only closes it): a
         # scan afterwards finds exactly what the first one found, and the offer's id no longer confirms anything
         k = len(re.findall(MEND_DONE, ctx.log()))
-        ctx.run("heraldia update mend apply all", r"Looking for|Buscando|Unknown|Incorrect")
+        ctx.run("heraldia update mend apply all", r"Looking for|Buscando")
         declined = p.wait_log(CONFIRM, 900)
         ctx.ticks(100)
-        ctx.run("heraldia update mend scan", r"Looking for|Buscando|Unknown|Incorrect")
+        ctx.run("heraldia update mend scan", r"Looking for|Buscando")
         end = time.monotonic() + 900
         while time.monotonic() < end and len(re.findall(MEND_DONE, ctx.log())) < k + 2:
             ctx.ticks(20)
@@ -399,7 +399,7 @@ def mend(a, p):
             p.check(not any(x.group(1) == "apply" for x in re.finditer(MEND_DONE, ctx.log())), "a stale confirmation repaired")
             print("MEND declined and stale confirmations: nothing changed, nothing ran", flush=True)
         n_before = len(re.findall(MEND_DONE, ctx.log()))
-        ctx.run("heraldia update mend apply all", r"Looking for|Buscando|Unknown|Incorrect")
+        ctx.run("heraldia update mend apply all", r"Looking for|Buscando")
         c = None
         end = time.monotonic() + 900
         while time.monotonic() < end and c is None:
@@ -420,7 +420,7 @@ def mend(a, p):
         print(f"MEND {ap[0].group(0)}", flush=True)
         # again: nothing left to do
         k = len(re.findall(MEND_DONE, ctx.log()))
-        ctx.run("heraldia update mend apply all", r"Looking for|Buscando|Unknown|Incorrect")
+        ctx.run("heraldia update mend apply all", r"Looking for|Buscando")
         end = time.monotonic() + 900
         while time.monotonic() < end and len(re.findall(MEND_DONE, ctx.log())) <= k:
             ctx.ticks(20)

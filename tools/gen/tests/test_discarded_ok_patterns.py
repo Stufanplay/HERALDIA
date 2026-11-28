@@ -39,15 +39,10 @@ SKIPPED = ("tools/probes/",)          # probes, not tests: nobody decides a gree
 
 # (file, ok) -> how many discarded calls in that file still have that `ok`. Shrinks as each lot lands.
 STILL_SWALLOW = {
-    ('tools/smoke/guide.py', 'entregada a \\w+ en \\d+ µs|Unknown|Incorrect'): 2,
-    ('tools/smoke/herald_look.py', 'choice send: [^\\n]*|Unknown|Incorrect'): 1,
-    ('tools/smoke/herald_look.py', 'guardadas por|Valor no válido|Invalid|Unknown|Incorrect'): 2,
     ('tools/smoke/journal.py', 'Applied|No entity|Unable|Unknown|Incorrect'): 1,
     ('tools/smoke/journal.py', "Granted|granted|Couldn't|Unknown|Incorrect|No "): 1,
     ('tools/smoke/journal.py', "Granted|granted|Couldn't|Unknown|No "): 3,
     ('tools/smoke/light_profile.py', '[Ss]print|ticks|Unknown'): 1,
-    ('tools/smoke/light_profile.py', 'configuración recargada|Unknown|Incorrect'): 1,
-    ('tools/smoke/mend.py', 'Looking for|Buscando|Unknown|Incorrect'): 5,
     ('tools/smoke/mend.py', 'Teleported|Unknown'): 1,
     ('tools/smoke/runtime_cost.py', 'Events stopped|Eventos parados|Unknown|Incorrect'): 1,
     ('tools/smoke/runtime_cost.py', 'Prepárate|Get ready|Unknown|Incorrect|already|ya hay'): 1,
@@ -55,15 +50,8 @@ STILL_SWALLOW = {
     ('tools/smoke/runtime_cost.py', 'left the game|Unknown|Incorrect'): 1,
     ('tools/smoke/treasure.py', 'Dropped|Gave|No items|Unknown'): 1,
     ('tools/smoke/treasure.py', 'Successfully filled|No blocks|Unknown|Incorrect'): 1,
-    ('tools/smoke/treasure.py', 'given to|dado a|Unknown|Incorrect'): 1,
-    ('tools/smoke/update.py', 'Analizando|Analysing|Unknown|Incorrect'): 2,
-    ('tools/smoke/update.py', 'Arreglos|Fixes|Unknown|Incorrect'): 1,
-    ('tools/smoke/update.py', 'Prueba|Dry run|Unknown|Incorrect'): 2,
     ('tools/smoke/update.py', 'Summoned|Unable|Invalid'): 1,
-    ('tools/smoke/update.py', 'guardadas por|Valor no válido|Unknown|Incorrect'): 1,
     ('tools/smoke/update_check.py', 'Made .* a server operator|Nothing changed|Unknown|Incorrect'): 1,
-    ('tools/smoke/update_path_b.py', 'Analizando|Analysing|Unknown|Incorrect'): 2,
-    ('tools/smoke/update_path_b.py', 'update undo confirm|Unknown|Incorrect|No hay'): 1,
     ('tools/smoke/wizard_huts.py', 'Loaded template|Failed'): 1,
 }
 NOT_LITERAL = 24          # discarded calls whose `ok` is built at run time: not judged, only counted

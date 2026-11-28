@@ -135,7 +135,7 @@ def main():
         # 3) /heraldia guide with one unique structure discovered; requested twice, there is still one
         ctx.run(f"advancement grant {PLAYER} only heraldia:unicas/{DISCOVERED}/descubrir", r"Granted|granted|Couldn't")
         for _ in range(2):
-            ctx.run(f"execute as {PLAYER} run heraldia guide", r"entregada a \w+ en \d+ µs|Unknown|Incorrect")
+            ctx.run(f"execute as {PLAYER} run heraldia guide", r"entregada a \w+ en \d+ µs")
         if srv.books(PLAYER, version) != 1:
             fails.append(f"after requesting it twice it carries {srv.books(PLAYER)} guides, not 1")
         else:
@@ -172,7 +172,7 @@ def main():
         srv.spawn(NEW_ITEM)
         if srv.books(NEW_ITEM):
             fails.append("with guia.entregar_al_entrar = false, a new player receives it on joining")
-        ctx.run(f"execute as {NEW_ITEM} run heraldia guide", r"entregada a \w+ en \d+ µs|Unknown|Incorrect")
+        ctx.run(f"execute as {NEW_ITEM} run heraldia guide", r"entregada a \w+ en \d+ µs")
         if srv.books(NEW_ITEM, version) != 1:
             fails.append("with the option disabled, /heraldia guide does not give the guide")
         srv.leave(NEW_ITEM)
