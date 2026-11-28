@@ -245,12 +245,14 @@ jobs:
           if-no-files-found: ignore
 
   # El job corre siempre que corran compilar y seleccion, también cuando la selección dice que no hace falta medir: entonces
-  # no mide, lo dice («saltado por ruta» en el nombre y la razón) y sale en verde. Así un job saltado por ruta, uno que midió
+  # no mide, lo dice (la razón, en la anotación y en el resumen) y sale en verde. Así un job saltado por ruta, uno que midió
   # y uno que arrancó y murió se leen distinto desde fuera: su último paso (Veredicto, tools/cost_status.py) deja UNA
   # anotación «COST-VERDICT coste MEASURED|SKIPPED|DIED» en el check run, y un check run terminado sin ella es que el runner
   # se perdió antes de llegar ahí. Para leerlo sin bajar nada: python3 tools/cost_status.py ci --repo OWNER/REPO --sha SHA.
+  # El nombre es fijo: con un sufijo calculado de `needs`, GitHub lo dejaba sin evaluar cuando seleccion fallaba (PR #157,
+  # run 46090363301), y una regla de rama que exija el check por su nombre no lo habría encontrado.
   coste:
-    name: Coste de generación (con y sin Heraldia)${{ needs.seleccion.outputs.coste == 'false' && ' · saltado por ruta' || '' }}
+    name: Coste de generación (con y sin Heraldia)
     needs: [compilar, seleccion]
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -326,7 +328,7 @@ jobs:
   # con y sin Heraldia, y el margen de aldeanos; compara con tools/smoke/runtime_reference.json (docs/DEVELOPMENT.md).
   # Como «coste»: corre siempre, mide sólo si la selección lo pide y su último paso deja una anotación COST-VERDICT juego.
   juego:
-    name: Coste de jugar (tiempo por tick con y sin Heraldia)${{ needs.seleccion.outputs.juego == 'false' && ' · saltado por ruta' || '' }}
+    name: Coste de jugar (tiempo por tick con y sin Heraldia)
     needs: [compilar, seleccion]
     runs-on: ubuntu-latest
     timeout-minutes: 60

@@ -457,6 +457,8 @@ def test_ci_wires_the_decision_to_the_right_job_and_a_failed_measurement_fails_i
     assert 'echo "juego=$(echo "$m" | python3 -c \'import json,sys; print("true" if json.load(sys.stdin)["runtime"]' in run
     for job, output, script in (("coste", "coste", "generation_cost.py"), ("juego", "juego", "runtime_cost.py")):
         j = jobs[job]
+        # a fixed name: an expression in it is left raw when seleccion fails, and a required check is matched by name
+        assert "${{" not in j["name"] and j["name"].startswith(("Coste de generación", "Coste de jugar")), (job, j["name"])
         assert "if" not in j and j["env"]["MIDE"] == "${{ needs.seleccion.outputs.%s }}" % output, job
         assert "continue-on-error" not in j, job
         steps = j["steps"]
