@@ -1,7 +1,7 @@
-"""tools/smoke/village_terrain.py, the doors of the terrain fit: the gate's figure reads the highest block of the street
-column (so a piece placed over the street -- a well on an avenue, a terminator's tower -- reads as a step), and the
-informative figure beside it reads the street under any such piece. A real step, with nothing on the street, fails both;
-and the gate's own figure is the same whether the informative one is asked for or not."""
+"""tools/smoke/village_terrain.py, the doors of the terrain fit: the gate's figure reads the street under any piece placed
+on it (`street_ground`), and the informative figure beside it the highest block of the street column, which reads a
+piece over the street -- a well on an avenue, a terminator's tower -- as a step. A real step, with nothing on the street,
+fails both; and the gate's own figure is the same whether the informative one is asked for or not."""
 import os, sys
 
 SMOKE = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "smoke")
@@ -20,22 +20,22 @@ def _street(y=9):
 
 
 def _doors(blocks, pieces):
-    street = {}
-    _, gate, _ = vt.fit_figures(blocks, pieces, None, street)
-    return gate, (street["ok"], street["n"])
+    highest = {}
+    _, gate, _ = vt.fit_figures(blocks, pieces, None, highest)
+    return gate, (highest["ok"], highest["n"])
 
 
 def test_a_door_on_its_street_passes_both():
     assert _doors(_street(), [HOUSE]) == ((1, 1), (1, 1))
 
 
-def test_a_piece_over_the_street_fails_the_gate_and_not_the_street_reading():
-    """A tower terminator standing on the street column, as in the CI village: the gate reads its top (a step of -9),
-    the informative figure the street under it."""
+def test_a_piece_over_the_street_passes_the_gate_and_fails_the_highest_block():
+    """A tower terminator standing on the street column, as in the CI village: the gate reads the street under it, the
+    informative figure its top (a step of -9)."""
     tower = dict(loc="heraldia:t/terminators/tower_b", proj="rigid", bb=[3, 10, -3, 5, 24, -2], junctions=[])
     blocks = _street()
     blocks.update({(4, y, -2): "minecraft:mossy_stone_bricks" for y in range(10, 25)})
-    assert _doors(blocks, [HOUSE, tower]) == ((0, 1), (1, 1))
+    assert _doors(blocks, [HOUSE, tower]) == ((1, 1), (0, 1))
 
 
 def test_a_real_step_fails_both():

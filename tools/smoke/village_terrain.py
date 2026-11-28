@@ -393,7 +393,7 @@ FIT_CONFIG = {"aldeas": {"separacion_bloques": NATURAL_GRID, "maximo": 100, "cam
               "caravanas": {"activado": False}, "viajeros": {"activado": False}, "medianas": {"activadas": False}}
 FIT_RADIUS = 104          # forced and read around the village start (the pieces of a standard village reach ~90 blocks)
 FIT_GRADE_OK = 0.85       # share of grading points whose ground is where it was asked (± 1; 27 of 29 in the test village)
-FIT_DOORS_OK = 0.9        # share of buildings whose door is within a step of its street
+FIT_DOORS_OK = 0.9        # share of buildings whose door is within a step of its street (read by `street_ground`)
 FIT_MAX_TREES = 10        # natural trunks left on the pieces (the forest villages had 60-170 before the clearing)
 SOIL = ("grass_block", "dirt", "podzol", "mud", "coarse_dirt", "rooted_dirt", "moss_block", "snow_block", "mycelium")
 
@@ -436,7 +436,7 @@ def street_ground(blocks, x, z, top, rigid_boxes):
     """`ground` that reads the street, not what stands on it: the blocks inside the box of a rigid piece (a filler, a
     terminator's tower, a building) are skipped, so a piece placed over the street column does not count as its ground.
     `ground` takes the highest block of the column, which there is the top of that piece (a well over an avenue, a
-    tower over a street: measured with the doors named, Nov 2026). For the INFORMATIVE door figure only."""
+    tower over a street: measured with the doors named, Nov 2026). The doors of the fit are read with it."""
     for y in range(top, top - 64, -1):
         if any(b[0] <= x <= b[3] and b[1] <= y <= b[4] and b[2] <= z <= b[5] for b in rigid_boxes):
             continue
@@ -445,16 +445,17 @@ def street_ground(blocks, x, z, top, rigid_boxes):
     return None
 
 
-def fit_figures(blocks, pieces, bad_doors=None, street=None):
-    """(graded points ok, total), (doors ok, total), natural trunks on the pieces. With `bad_doors` (a list), each door
-    that is not within a step of its street is appended to it: (piece, its box, the street column, the step). With
-    `street` (a dict), the same doors read with `street_ground` (the street under any piece placed on it) go into it as
-    ok, n and bad: an informative figure, which the test prints and never compares (the gate is the first one)."""
+def fit_figures(blocks, pieces, bad_doors=None, highest=None):
+    """(graded points ok, total), (doors ok, total), natural trunks on the pieces. A door is read with `street_ground`:
+    the street under any piece placed on it. With `bad_doors` (a list), each door that is not within a step of its
+    street is appended to it: (piece, its box, the street column, the step). With `highest` (a dict), the same doors
+    read with `ground` (the highest block of the street column, what the test read until Nov 2026) go into it as ok,
+    n and bad: an informative figure, which the test prints and never compares."""
     g_ok = g_n = d_ok = d_n = 0
     boxes = [p["bb"] for p in pieces]
     rigid = [p["bb"] for p in pieces if p["proj"] == "rigid"]
-    if street is not None:
-        street.update(ok=0, n=0, bad=[])
+    if highest is not None:
+        highest.update(ok=0, n=0, bad=[])
     for p in pieces:
         bb = p["bb"]
         # grading points: junctions of a piece inside its own footprint with no height difference (a joint's junction lies
@@ -473,20 +474,20 @@ def fit_figures(blocks, pieces, bad_doors=None, street=None):
         jx, jz = joint
         dx = -1 if jx < bb[0] else 1 if jx > bb[3] else 0
         dz = -1 if jz < bb[2] else 1 if jz > bb[5] else 0
-        h = ground(blocks, jx + dx, jz + dz, bb[1] + 8)
+        h = street_ground(blocks, jx + dx, jz + dz, bb[1] + 8, [b for b in rigid if b is not bb])
         d_n += 1
         # standing on the street (h + 1) against standing at the door's joint column (the floor row, bb[1])
         ok = h is not None and abs(h + 1 - bb[1]) <= 1
         d_ok += ok
         if not ok and bad_doors is not None:
             bad_doors.append((p["loc"], bb, (jx + dx, jz + dz), None if h is None else bb[1] - (h + 1)))
-        if street is not None:
-            hs = street_ground(blocks, jx + dx, jz + dz, bb[1] + 8, [b for b in rigid if b is not bb])
-            ok_s = hs is not None and abs(hs + 1 - bb[1]) <= 1
-            street["n"] += 1
-            street["ok"] += ok_s
-            if not ok_s:
-                street["bad"].append((p["loc"], bb, (jx + dx, jz + dz), None if hs is None else bb[1] - (hs + 1)))
+        if highest is not None:
+            hh = ground(blocks, jx + dx, jz + dz, bb[1] + 8)
+            ok_h = hh is not None and abs(hh + 1 - bb[1]) <= 1
+            highest["n"] += 1
+            highest["ok"] += ok_h
+            if not ok_h:
+                highest["bad"].append((p["loc"], bb, (jx + dx, jz + dz), None if hh is None else bb[1] - (hh + 1)))
     trunks = 0
     for (x, y, z), name in blocks.items():
         if not name.endswith("_log") or not blocks.get((x, y - 1, z), "").endswith(SOIL):
@@ -539,20 +540,20 @@ def terrain_fit(jar, work, fails, measure):
     world = os.path.join(work, "world")
     sid, pieces = start_pieces(world, x, z)
     blocks = read_blocks(world, x - FIT_RADIUS - 16, z - FIT_RADIUS - 16, x + FIT_RADIUS + 16, z + FIT_RADIUS + 16)
-    bad, street = [], {}
-    (g_ok, g_n), (d_ok, d_n), trunks = fit_figures(blocks, pieces, bad, street)
+    bad, highest = [], {}
+    (g_ok, g_n), (d_ok, d_n), trunks = fit_figures(blocks, pieces, bad, highest)
     print(f"fit: {sid} at {x} {z}: {len(pieces)} pieces; ground at {g_ok} of {g_n} grading points; {d_ok} of {d_n} doors "
           f"within a step of their street; {trunks} natural trunks on the pieces")
     share = lambda a, n: f"{a / n:.3f}" if n else "-"
-    print(f"fit: doors within a step: {d_ok} of {d_n} ({share(d_ok, d_n)}, the gate: highest block of the street column) "
-          f"| {street['ok']} of {street['n']} ({share(street['ok'], street['n'])}, the street under any piece on it, "
-          f"informative: compared with nothing)")
+    print(f"fit: doors within a step: {d_ok} of {d_n} ({share(d_ok, d_n)}, the gate: the street under any piece on it) "
+          f"| {highest['ok']} of {highest['n']} ({share(highest['ok'], highest['n'])}, the highest block of the street "
+          f"column, informative: compared with nothing)")
     # every door that misses, by name: a count alone cannot tell one mechanism from four accidents
     for loc, bb, (cx, cz), step in bad:
         print(f"fit:   door off its street: {loc} box {bb} street column ({cx}, {cz}) "
               f"{'no ground under it' if step is None else f'floor {step:+d} from the street'}")
-    for loc, bb, (cx, cz), step in street["bad"]:
-        print(f"fit:   (informative) door off the street under the pieces: {loc} box {bb} street column ({cx}, {cz}) "
+    for loc, bb, (cx, cz), step in highest["bad"]:
+        print(f"fit:   (informative) door off the highest block of its street column: {loc} box {bb} street column ({cx}, {cz}) "
               f"{'no ground under it' if step is None else f'floor {step:+d} from the street'}")
     if measure:
         return
