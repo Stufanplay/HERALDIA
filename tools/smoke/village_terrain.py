@@ -28,6 +28,7 @@ import argparse, glob, io, json, os, queue, re, struct, subprocess, sys, threadi
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "gen"))
 import server_smoke as s
+import ground_blocks
 import nbtlib
 from themes import FAMILIES
 
@@ -342,7 +343,7 @@ def natural_piers(ctx, fails, villages):
 
 def natural(jar, work, fails, measure, seeds):
     """Several worlds (fixed seeds) with only the coastal family, until NATURAL_N villages are gathered."""
-    total, with_pier, times = 0, 0, []
+    total, with_pier, times, queries = 0, 0, [], []
     for seed in seeds:
         if total >= NATURAL_N:
             break
@@ -360,13 +361,23 @@ def natural(jar, work, fails, measure, seeds):
             print(f"natural: seed {seed}: {len(villages)} coastal villages")
             with_pier += natural_piers(ctx, fails, villages)
             total += len(villages)
-            times += [int(m.group(1)) for m in re.finditer(r"aldea de costa en .*? en (\d+) µs", ctx.log())]
+            for m in re.finditer(r"aldea de costa en .*? (\d+) consultas del fondo.*? en (\d+) µs", ctx.log()):
+                queries.append(int(m.group(1)))
+                times.append(int(m.group(2)))
         finally:
             stop(proc)
     if times:
+        # Informational, not a limit: the search runs when a coastal village's start is created, on a world-generation
+        # thread; the server thread does not run it, but a /locate that creates the start waits for it (here: "Locating
+        # element ... took 700 ms", 126 ms of it this search). Its wall time moved 0.76x-1.35x for the same village between
+        # two identical runs (#90, 12 villages). Its seabed queries are what is deterministic (12 of 12
+        # identical), and they bound the work: about 0.56 ms each. Measured over 30 seeds (71 villages): queries median 78,
+        # max 252; time median 64 ms, max 194 ms, against ~470 ms median to assemble the village itself.
         times.sort()
-        print(f"natural: port search in {len(times)} villages: median {times[len(times) // 2] / 1000:.1f} ms, "
-              f"máximo {times[-1] / 1000:.1f} ms")
+        queries.sort()
+        print(f"natural: port search (informational: wall time on a world-generation thread; /locate waits for it) in "
+              f"{len(times)} villages: median {times[len(times) // 2] / 1000:.1f} ms, max {times[-1] / 1000:.1f} ms; "
+              f"seabed queries (deterministic): median {queries[len(queries) // 2]}, max {queries[-1]}")
     rate = with_pier / total if total else 0
     print(f"natural: {with_pier} of {total} coastal villages with a pier ({rate:.0%})")
     if total < NATURAL_N:
@@ -385,15 +396,14 @@ FIT_GRADE_OK = 0.85       # share of grading points whose ground is where it was
 FIT_DOORS_OK = 0.9        # share of buildings whose door is within a step of its street
 FIT_MAX_TREES = 10        # natural trunks left on the pieces (the forest villages had 60-170 before the clearing)
 SOIL = ("grass_block", "dirt", "podzol", "mud", "coarse_dirt", "rooted_dirt", "moss_block", "snow_block", "mycelium")
-NOT_GROUND = ("leaves", "_log", "vine", "bamboo", "mushroom", "cocoa", "snow", "_sapling")
 
 
 def _is_ground(name):
-    """Does this block count as ground? (vegetation and air do not; water does)"""
-    if name in AIR_BLOCK and name != "minecraft:water" or any(v in name for v in NOT_GROUND):
-        return False
-    return not name.endswith(("_carpet", "torch", "_sign", "_button", "pressure_plate", "rail", "flower", "_tulip",
-                              "poppy", "dandelion", "bush", "leaf_litter", "petals"))
+    """Does this block count as ground? (vegetation and air do not; water does.) Decided from the 26.3 registry by
+    `ground_blocks.is_ground`: a collision box above 1/8 of a block, and not in the registry's tags for trees and
+    plants (#98). The lists of names it replaces let 123 blocks with no collision box through as ground, among them
+    12 of the 13 plants #98 found (blue orchids, sugar cane, wildflowers...; one flower is the whole ±1 tolerance)."""
+    return ground_blocks.is_ground(name)
 
 
 def ground(blocks, x, z, top):

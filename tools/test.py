@@ -27,9 +27,10 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SMOKE = "tools/smoke/server_smoke.py"
 FULL = "*"            # in the map: the change affects everything (common code) -> full suite
 NOT_TESTS = {"server_smoke.py", "modrinth.py", "generation_cost.py", "runtime_cost.py", "wayfarers.py",
-             "saved_world.py"}  # common modules, the cost
+             "saved_world.py", "ground_blocks.py"}  # common modules, the cost
 # ones (their own jobs) and the wayfarers' scenario, which runs inside caravans.py (same server and corridor);
-# saved_world.py reads a saved world's region files for village_routes.py (a helper: no --jar, no server of its own)
+# saved_world.py reads a saved world's region files for village_routes.py (a helper: no --jar, no server of its own);
+# ground_blocks.py is village_terrain.py's table of what counts as ground (a helper, and the script that regenerates it)
 # Compatibility with other mods (one test per group, with Modrinth mods): long and with downloads, so in a PR
 # it only runs if the test itself, the mod list or the common placement code changes (what decides where each
 # structure appears and whether it clashes with those of other mods). In the full suite (push to develop, workflow_dispatch, label) always.
@@ -164,6 +165,9 @@ MAP = [
     # the model of the villager path search: the mediums' contract and village_routes' "shut in" figure
     ("tools/gen/mediums/_paths.py", MEDIUMS_MOBS + NETHER_END + ["tools/smoke/village_routes.py"]),
     ("tools/smoke/saved_world.py", ["tools/smoke/village_routes.py"]),
+    # what village_terrain's ground reader counts as ground: the table, its script and the game's collision dump (#98)
+    ("tools/smoke/ground_blocks.*", ["tools/smoke/village_terrain.py"]),
+    ("tools/smoke/BlockCollision.java", ["tools/smoke/village_terrain.py"]),
     ("tools/gen/mediums/*", MEDIUMS_MOBS + NETHER_END), (JAVA + "common/MediumStructures.java", MEDIUMS + NETHER_END),
     # inhabitants of the medium structures: their option, applied when each one first loads
     (JAVA + "inhabitants/*", MEDIUMS),
