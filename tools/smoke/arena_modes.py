@@ -137,13 +137,13 @@ def menu_choice(p, work, center, bell):
     cfg = json.load(open(os.path.join(work, "config", "heraldia.json")))
     cfg["arena"]["modos"]["supervivencia"] = False
     json.dump(cfg, open(os.path.join(work, "config", "heraldia.json"), "w"))
-    ctx.run("heraldia reload", r"[Rr]eload|[Rr]ecarg|[Cc]onfig")
+    ctx.run("heraldia reload", r"Configuration reloaded|Configuración recargada")
     ctx.run(f"execute as {P} run heraldia choice click 15", r"choice click: slot")
     p.check(p.wait_log(rf"arena: {P} elige survival en el menú: rechazado", timeout=10), "se acepta un modo desactivado")
     p.check(not re.search(r"arena: cuenta atrás", ctx.log()), "un modo desactivado empieza una partida")
     cfg["arena"]["modos"].pop("supervivencia")
     json.dump(cfg, open(os.path.join(work, "config", "heraldia.json"), "w"))
-    ctx.run("heraldia reload", r"[Rr]eload|[Rr]ecarg|[Cc]onfig")
+    ctx.run("heraldia reload", r"Configuration reloaded|Configuración recargada")
     # the refusal closed nothing it should not: the bell again (a new menu), and time attack picked with a click
     p.check("choice: none (no window" in ctx.run(f"execute as {P} run heraldia choice", r"choice: [^\n]*").group(0),
             "el menú de la arena sigue abierto tras rechazar un modo")
@@ -170,7 +170,7 @@ def first_start(p, pl, work):
     for name, n in (("Veterano", 7), ("Otra", 3), ("-servidor-", 7)):
         ctx.run(f"scoreboard players set {name} heraldia_arena {n}", r"Set \[heraldia_arena\]|Set score")
     config(work, True, TWO_AGO)
-    ctx.run("heraldia reload", r"[Rr]eload|[Rr]ecarg|[Cc]onfig")
+    ctx.run("heraldia reload", r"Configuration reloaded|Configuración recargada")
     p.check(p.wait_log(r"arena: récords migrados del marcador \(3 jugadores; cooperativo: Veterano 7\)", timeout=60),
             "no se migra el récord del marcador vanilla")
     for rule in ("spawn_mobs", "advance_time"):
@@ -266,6 +266,7 @@ def first_start(p, pl, work):
     p.check(re.search(rf"1\. {P}: \d+:\d\d \(2 waves\)", new_item), "la clasificación del contrarreloj no da el tiempo")
     p.check(re.search(rf"1\. {P}: wave 2", new_item), "la clasificación de la supervivencia no da la oleada")
     p.check(re.search(rf"Record: {P}, wave 2", new_item), "sin el récord de la supervivencia")
+    # the refusal is the expected reply: no week has been archived yet
     ctx.run("heraldia arena leaderboard coop 1", r"That week is not kept: the history has 0|No se guarda esa semana")
 
     # 6. reinicio de semana forzado
@@ -314,6 +315,7 @@ def second_start(p, pl, box):
     p.check(p.wait_log(rf"arena: semana del [\d/]+ cerrada; campeones: timeattack={P}", timeout=60),
             "el reinicio que pasó con el servidor apagado no cierra la semana al arrancar")
     p.check(not re.search(r"récords migrados", ctx.log()), "la migración se repite")
+    # the refusal is the expected reply: only two weeks are kept
     ctx.run("heraldia arena leaderboard coop 3", r"That week is not kept: the history has 2|No se guarda esa semana")
     before = len(ctx.log())
     ctx.run("heraldia arena leaderboard timeattack 2", r"Arena leaderboard, week of")
