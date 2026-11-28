@@ -376,6 +376,34 @@ def runtime(changed_list):
                for r in changed_list)
 
 
+def matching(changed_list, paths):
+    """The changed files that are in `paths` (COST_PATHS or RUNTIME_PATHS) and not in COST_WITHOUT, listed. It is the same
+    rule as cost()/runtime() written separately, so that --ci-matrix can check one against the other: a cost job that
+    says "skipped by path" while a file it depends on changed is an error, not a skip."""
+    return [r for r in changed_list if any(fnmatch.fnmatch(r, p) for p in paths)
+            and not any(fnmatch.fnmatch(r, p) for p in COST_WITHOUT)]
+
+
+def check_decision(flag, changed_list, paths, name):
+    """None if the decision `flag` (cost() or runtime()) agrees with the files that match `paths`; else the error."""
+    hit = matching(changed_list, paths)
+    if flag == bool(hit):
+        return None
+    return (f"the selector says {'run' if flag else 'skip'} the {name} job but "
+            + (f"{len(hit)} changed file(s) are in {name}: {', '.join(hit[:5])}" if hit else f"no changed file is in {name}"))
+
+
+def why(changed_list, paths, name, full=False):
+    """One line for CI: why the cost job of `paths` (COST_PATHS or RUNTIME_PATHS, without COST_WITHOUT) runs or is skipped,
+    naming the files that decided it (the job's own summary and its check-run annotation carry it)."""
+    if full:
+        return "full suite (push to develop, workflow_dispatch, the bateria-completa label or [bateria completa] in the title)"
+    hit = matching(changed_list, paths)
+    if hit:
+        return f"{len(hit)} changed file(s) in {name}: " + ", ".join(hit[:5]) + (f" (+{len(hit) - 5} more)" if len(hit) > 5 else "")
+    return f"none of the {len(changed_list)} changed file(s) is in {name} (or all are in COST_WITHOUT)"
+
+
 def changed_list(base):
     """Files changed versus `base` (merge-base), plus those of the working tree not yet committed."""
     def git(*a):
@@ -501,22 +529,45 @@ def unit_tests():
                           cwd=ROOT).returncode
 
 
+def run_teed(cmd, out_path=None):
+    """Runs `cmd` with its stdout and stderr shown as they come and, if `out_path` is given, also written there.
+    The test's own output is where its failure message is (a test's `FALLOS:` list, a `SystemExit` from `run`); the
+    server's logs/latest.log does not hold it, so an artifact with only that log could not say why a test failed."""
+    out = open(out_path, "w", encoding="utf-8", errors="replace") if out_path else None
+    try:
+        proc = subprocess.Popen(cmd, cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                                encoding="utf-8", errors="replace")
+        for line in proc.stdout:
+            sys.stdout.write(line)
+            if out:
+                out.write(line)
+        sys.stdout.flush()
+        return proc.wait()
+    finally:
+        if out:
+            out.close()
+
+
 def execute(tests, jar, work, logs=None):
     """Runs the server tests serially (all of them, even if one fails) and returns those that fail. Copies the
-    logs/latest.log of each one to `logs` (if given) to upload it as an artifact."""
+    logs/latest.log of each one to `logs` (if given) to upload it as an artifact, and writes there each test's own
+    output too (`<test>.output.txt`), which is where its failure message is."""
     bad_all = []
     for p in tests:
         t0 = time.monotonic()
+        name = p.replace("::", "-").replace("/", "-").replace(".py", "")
         print(f"::group::{p}" if os.environ.get("GITHUB_ACTIONS") else f"== {p}", flush=True)
-        r = subprocess.run([sys.executable, *order(p), "--jar", jar, "--work", work], cwd=ROOT).returncode
+        if logs:
+            os.makedirs(logs, exist_ok=True)
+        r = run_teed([sys.executable, *order(p), "--jar", jar, "--work", work],
+                     os.path.join(logs, name + ".output.txt") if logs else None)
         if os.environ.get("GITHUB_ACTIONS"):
             print("::endgroup::")
         print(f"{'OK' if r == 0 else 'FAIL'} {p} ({time.monotonic() - t0:.0f} s)", flush=True)
         if logs:
-            os.makedirs(logs, exist_ok=True)
             src = os.path.join(work, "logs", "latest.log")
             if os.path.isfile(src):
-                shutil.copy(src, os.path.join(logs, p.replace("::", "-").replace("/", "-").replace(".py", "") + ".log"))
+                shutil.copy(src, os.path.join(logs, name + ".log"))
         if r:
             bad_all.append(p)
     return bad_all
@@ -562,7 +613,18 @@ def main(argv=None):
         changes = changed_list(a.base)
         (full, tests), with_cost, with_runtime = choose(changes), cost(changes), runtime(changes)
     if a.ci_matrix:
-        print(json.dumps(dict(matrix(full, tests), full=full, cost=with_cost, runtime=with_runtime), ensure_ascii=False))
+        errors = [e for e in ((check_decision(with_cost, changes, COST_PATHS, "COST_PATHS"),
+                               check_decision(with_runtime, changes, RUNTIME_PATHS, "RUNTIME_PATHS"))
+                              if not (a.all or a.full) else
+                              (None if with_cost else "the full suite must measure the generation cost",
+                               None if with_runtime else "the full suite must measure the play cost")) if e]
+        if errors:                  # a skip that would lie: seleccion fails instead of the cost job going green unmeasured
+            print("SELECTOR ERROR: " + "; ".join(errors), file=sys.stderr)
+            return 1
+        print(json.dumps(dict(matrix(full, tests), full=full, cost=with_cost, runtime=with_runtime,
+                              cost_reason=why(changes, COST_PATHS, "COST_PATHS", a.all or a.full),
+                              runtime_reason=why(changes, RUNTIME_PATHS, "RUNTIME_PATHS", a.all or a.full)),
+                         ensure_ascii=False))
         return 0
     if a.list_only or a.affected:
         print(f"{len(changes)} ficheros cambiados frente a {a.base}" if changes else "full suite", file=sys.stderr)

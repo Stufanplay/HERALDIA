@@ -148,7 +148,7 @@ def main():
         write_config(a.work, CONFIG)
         ctx.run("heraldia reload", r"(?:Configuration reloaded from|Configuración recargada de) heraldia\.json")
         # 2) the first clue
-        ctx.run(f"heraldia treasure give {P}", r"given to|dado a|Unknown|Incorrect")
+        ctx.run(f"heraldia treasure give {P}", r"given to|dado a")
         if not in_hand(srv, f"minecraft:paper[minecraft:custom_data~{{{MARK}:{{v:1}}}}]"):
             m = ctx.run(f"data get entity {P} SelectedItem", r"has the following entity data: (.*)|No entity|found no")
             fails.append(f"/heraldia treasure give does not put the fragment in hand: {m.group(0)[:300]}")

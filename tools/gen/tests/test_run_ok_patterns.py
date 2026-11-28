@@ -9,8 +9,8 @@ exactly that:
         if "not loaded" not in m.string:        # <- read out of ERROR_PATTERN, not out of `ok`
             break
 
-That retry works only while `run` is lenient. The moment `run` fails by default -- which is where
-this harness is going -- such a branch becomes dead code and the test dies on a slow chunk instead
+That retry works only while `run` is lenient. Once `run` fails by default -- which is where
+this harness is now -- such a branch becomes dead code and the test dies on a slow chunk instead
 of retrying. It would not die in the pass that turned the switch on: the branch is only taken when a
 column happens not to be loaded, which a measured full pass hit in 2 of 17 sites. That is the worst
 shape a change can have, so the invariant is checked statically instead of being left to a battery
@@ -26,23 +26,21 @@ import ast
 import pathlib
 import re
 
+import sys
+
 import pytest
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
+_path = list(sys.path)      # tools/smoke only while importing (see test_compat_mods.py)
+sys.path.insert(0, str(ROOT / "tools" / "smoke"))
+import server_smoke as s  # noqa: E402
+sys.path[:] = _path
 
 # The fragment a caller greps for -> a real reply of the dedicated server that carries it. The reply
 # is what `ok` is tested against: a caller asking `"failed" in ...` of a "Test failed" reply whose
 # `ok` holds "Test failed" is right, and testing `ok` against the bare fragment would call it wrong.
-FAILURE_REPLIES = {
-    "not loaded": "That position is not loaded",
-    "no está cargada": "esa posición no está cargada",
-    "failed": "Test failed",
-    "Failed": "Failed to place",
-    "No items": "No items were found",
-    "No entity": "No entity was found",
-    "Unknown": "Unknown or incomplete command",
-    "Incorrect": "Incorrect argument for command",
-}
+# The list lives in `server_smoke.FAILURE_REPLIES`, shared with test_discarded_ok_patterns.py.
+FAILURE_REPLIES = s.FAILURE_REPLIES
 QUOTED = re.compile('"([^"]*)"')
 LOOKAHEAD = 8
 

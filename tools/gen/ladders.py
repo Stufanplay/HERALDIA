@@ -42,17 +42,29 @@ def columns(t):
     return P._ladder_columns(t)
 
 
+def level(t):
+    """The height, in the piece, of the feet of a villager on the ground outside it. A jigsaw joins two pieces side by
+    side at the same height, and a village's pieces are joined at the height of their walkers' feet, one above the
+    ground, so it is the y of the jigsaw that joins the piece to its parent: its entrance, or, for a piece without one
+    (a street, a terminator), its lowest horizontal jigsaw; 0 for a piece with neither (a bed, a decor: placed inside
+    another piece). A house is joined at y = 0, a well or a pond at y = 1: its layer 0 is at the ground's height."""
+    hz = [j for j in t.jigsaws if not j["orientation"].startswith(("up", "down"))]
+    ent = [j["pos"][1] for j in hz if j["name"] == "heraldia:entrance"]
+    return min(ent or [j["pos"][1] for j in hz] or [0])
+
+
 def _ground(t):
     from mediums import _paths as P
-    return P.Ground(t, margin=MARGIN)
+    return P.Ground(t, margin=MARGIN, base=level(t))
 
 
 def ground_walk(t, g=None):
     """The cells a villager reaches on foot from the flat ground modelled around the piece (its outer ring in)."""
     g = g or _ground(t)
     x0, z0, x1, z1 = g.box
-    starts = [(x, 0, z) for x in range(x0, x1) for z in (z0, z1 - 1) if g.floor(x, 0, z) is not None]
-    starts += [(x, 0, z) for z in range(z0, z1) for x in (x0, x1 - 1) if g.floor(x, 0, z) is not None]
+    y = g.base
+    starts = [(x, y, z) for x in range(x0, x1) for z in (z0, z1 - 1) if g.floor(x, y, z) is not None]
+    starts += [(x, y, z) for z in range(z0, z1) for x in (x0, x1 - 1) if g.floor(x, y, z) is not None]
     walk, todo = set(starts), list(starts)
     while todo:
         for c in g.neighbors(todo.pop()):

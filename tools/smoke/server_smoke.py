@@ -72,6 +72,23 @@ DOWNLOAD_ATTEMPTS = 4         # a download cut off by the network (seen with Fab
 # same Mojang noise; with this pattern, 0. It still has to match `Registry loading errors`, a real 26.3 failure, which
 # is why the word is not simply removed and why `error:` would have been wrong.
 ERROR_PATTERN = r"Unknown|Incorrect|Failed|Invalid|errors?\b(?!=)|not loaded"
+# Real failure replies of the dedicated server, verbatim, keyed by the fragment a caller greps a reply for. The ONE list
+# the two static checks of the harness judge `ok` patterns against -- tools/gen/tests/test_run_ok_patterns.py (a reply
+# that is read must be accepted) and test_discarded_ok_patterns.py (a reply that is thrown away must not be) -- so a new
+# real failure goes in here and nowhere else. Read on a 26.3 server: "Unknown or incomplete command. See below for
+# error" (`notacommand`), "Incorrect argument for command" (`gamerule no_such_rule true`), "Invalid NBT path element"
+# (`data get entity @e[limit=1] Foo..Bar`), "That position is not loaded", "No entity was found" (`tp NoSuchPlayer ...`).
+FAILURE_REPLIES = {
+    "not loaded": "That position is not loaded",
+    "no está cargada": "esa posición no está cargada",
+    "failed": "Test failed",
+    "Failed": "Failed to place",
+    "No items": "No items were found",
+    "No entity": "No entity was found",
+    "Unknown": "Unknown or incomplete command. See below for error",
+    "Incorrect": "Incorrect argument for command",
+    "Invalid": "Invalid NBT path element",
+}
 # /heraldia info nearby: (point, radius); the last one, with the maximum radius, measures the worst case. The search runs off the
 # server thread; on it only the confirmation (INFO_MAIN_MS at most). INFO_MAX_MS is the cap for the full response.
 INFO_POINTS = [((0, 0), None), ((6000, 0), 6000), ((0, -6000), 10000)]
@@ -126,10 +143,45 @@ def latest_installer():
         return next(v["version"] for v in json.load(r) if v["stable"])
 
 
-def free_port():
-    with socket.socket() as so:
+_given_ports = set()
+
+
+def ephemeral_range():
+    """The kernel's ephemeral port range (Linux: /proc/sys/net/ipv4/ip_local_port_range; 32768-60999 by default)."""
+    try:
+        with open("/proc/sys/net/ipv4/ip_local_port_range") as f:
+            lo, hi = (int(x) for x in f.read().split())
+        return lo, hi
+    except (OSError, ValueError):
+        return 32768, 60999
+
+
+def free_port(low=20000):
+    """A TCP port that is free now, BELOW the kernel's ephemeral range, and not one this process has handed out before.
+    The test binds it later (the server, after starting; runtime_cost.py up to four times over ~47 min), so there is
+    always a gap; a port from bind(("", 0)) is ephemeral, the range every outgoing connection of the machine draws its
+    local port from (downloads, the server's own HTTPS at start, JMX clients, the runner's agent), and one of them can be
+    holding it when the server binds: "FAILED TO BIND TO PORT ... Address already in use", juego dead in 18 s in CI run
+    44965032309. Below the range the kernel never assigns a port on its own, so only another explicit bind can take it."""
+    import random
+    lo, _ = ephemeral_range()
+    if lo - 1 > low:
+        for _ in range(500):
+            p = random.randrange(low, lo)
+            if p in _given_ports:
+                continue
+            with socket.socket() as so:
+                try:
+                    so.bind(("", p))
+                except OSError:
+                    continue
+            _given_ports.add(p)
+            return p
+    with socket.socket() as so:          # no room below the ephemeral range: the old way
         so.bind(("", 0))
-        return so.getsockname()[1]
+        p = so.getsockname()[1]
+    _given_ports.add(p)
+    return p
 
 
 def prepare(work, jar, p):
@@ -200,12 +252,22 @@ def pending(lines, seen):
         seen.append(line)
 
 
-def run(proc, lines, seen, cmd, ok):
-    """Sends a command and returns the first success or error reply. First discards (to `seen`) whatever was left in the
-    queue: the line from more than one earlier command (e.g. two "Test passed") is not taken as this one's reply.
+_LOGGED = re.compile(r"^\[[^\]]*\] \[[^\]]*/(?:WARN|ERROR|FATAL)\]: ")
 
-    It returns with the **error** reply too, and raises nothing: a caller that does not look at what came back accepts
-    any failure of its command and carries on as if it had worked. Where the command has to have worked, use `must`."""
+
+def run(proc, lines, seen, cmd, ok):
+    """Sends a command and returns its success reply, the first line that matches `ok`. First discards (to `seen`)
+    whatever was left in the queue: the line from more than one earlier command (e.g. two "Test passed") is not taken
+    as this one's reply.
+
+    **It fails by default**: the wait is `ok` OR `ERROR_PATTERN` (so a failure ends it promptly instead of running out
+    COMMAND_TIMEOUT_S), and a reply that matches `ERROR_PATTERN` and not `ok` raises SystemExit naming the command and
+    the reply. It used to hand that reply back and raise nothing, so a caller that did not look at it accepted the
+    failure and carried on as if the command had worked (docs/LESSONS.md). A caller that has to tell a failure apart
+    -- a retry on `not loaded`, a "No entity" that means "none" -- lists it in its own `ok` and reads the reply;
+    tools/gen/tests/test_run_ok_patterns.py checks that every reply inspected for a failure accepts it. When a red
+    shows up here in a test nobody changed, the fix is to make that call robust, never to widen a pattern until the
+    failure matches it."""
     pending(lines, seen)
     send(proc, cmd)
     end = time.monotonic() + COMMAND_TIMEOUT_S
@@ -216,19 +278,55 @@ def run(proc, lines, seen, cmd, ok):
         # and caravans.py died with a TypeError (CI, Nov 2026). Such a line still counts if `ok` itself matches it.
         if "]: Heraldia: " in m.string and not re.search(ok, m.string):
             continue
+        # Nor is a line the server logs at WARN or ERROR level: a command's reply, failure included, reaches the
+        # console as INFO. Carpet's fake player looks its profile up on api.mojang.com from another thread, and when
+        # that is refused (HTTP 429 in CI) it logs "[Server thread/ERROR]: Got an error with a html body ..." while
+        # the spawn is being awaited -- the spawn works all the same, on a local profile, and the switch stopped
+        # admin.py on that line (#155). Measured before narrowing: in ~127,000 lines of local runs, no WARN or ERROR
+        # line matched ERROR_PATTERN at all, and all 92 that matched it were INFO replies. Counts if `ok` matches it.
+        if _LOGGED.search(m.string) and not re.search(ok, m.string):
+            continue
+        if not re.search(ok, m.string):
+            raise SystemExit(f"{cmd}: the server replied {m.string.strip()!r}")
         return m
 
 
 def must(proc, lines, seen, cmd, ok):
-    """`run`, with the reply asserted: raises SystemExit unless the line that came back holds the success reply `ok`.
+    """The same as `run`, which now fails by default; kept for the callers that say so explicitly.
 
-    Taking the words of the failure out of an `ok` pattern is not enough on its own -- `run` ORs in `ERROR_PATTERN`
-    anyway, so the wait still ends on the error reply and still returns it. Someone has to look at it. A pattern passed
-    here must therefore not match the failure either, or there is nothing left to tell apart."""
-    m = run(proc, lines, seen, cmd, ok)
-    if not re.search(ok, m.string):
-        raise SystemExit(f"{cmd}: the server replied {m.string.strip()!r}")
-    return m
+    A pattern passed here (or to `run`) must not match the failure the caller wants refused: with the failure's words
+    in `ok`, the error reply *is* the accepted reply and there is nothing left to tell apart."""
+    return run(proc, lines, seen, cmd, ok)
+
+
+# Carpet's simulated players are what 31 waits of the server tests spawn and kill. Whether Carpet is there is asked once,
+# by the command those waits use, not by the mod list: "- carpet <version>" under "Loading N mods" says the jar was
+# loaded, while this says `/player` exists and answers -- which is also false when Carpet is loaded with the command
+# turned off in its own settings. Read on a 26.3 server with and without Carpet, same .jar: a `player` command on a name
+# that is not online answers "Can only manipulate existing players" with Carpet, and "Unknown or incomplete command. See
+# below for error" without it; it spawns, kills and moves nothing.
+CARPET_PROBE = "player heraldia_no_such_bot kill"
+CARPET_HERE = "Can only manipulate existing players"
+CARPET_ABSENT = "Unknown or incomplete command"
+
+
+def require_carpet(ctx):
+    """Stops the test, saying where Carpet is missing, unless this server knows Carpet's `/player` command.
+
+    Called just before each `player ... spawn`; it sends its probe once per server (it remembers on `ctx`), so a test
+    that spawns in a loop or after a restart pays one command per start. Both replies are listed so the wait ends at
+    once on either, and only Carpet's is accepted: the three-way wait of docs/LESSONS.md. Before it, 31 waits listed
+    `Unknown|Incorrect` in their own `ok` so that a missing Carpet passed for a spawn that worked."""
+    if getattr(ctx, "_carpet_checked", False):
+        return
+    m = ctx.run(CARPET_PROBE, f"{CARPET_HERE}|{CARPET_ABSENT}")
+    if CARPET_HERE not in m.string:
+        test = os.path.basename(sys.argv[0]) or "this test"
+        raise SystemExit(f"{test}: Carpet is not loaded on this server -- `player` is not a command here (it answered "
+                         f"{m.string.strip()!r}). Copy Carpet into the mods/ folder of this test's --work before the "
+                         f"server starts (trophies.CARPET, fetched with terralith_biomes.fetch), and check that Carpet's "
+                         f"settings do not turn `/player` off.")
+    ctx._carpet_checked = True
 
 
 # Condition waits of the server tests: the check is repeated for up to UNTIL_S seconds (generous: CI is
@@ -293,7 +391,7 @@ class Context:
         return run(self.proc, self.lines, self.seen, cmd, ok)
 
     def must(self, cmd, ok):
-        """`run`, failing if the reply is not the success reply (see `must`)."""
+        """`run`, which fails if the reply is not the success reply (see `must`)."""
         return must(self.proc, self.lines, self.seen, cmd, ok)
 
     def log(self):

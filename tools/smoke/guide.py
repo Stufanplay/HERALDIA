@@ -50,12 +50,13 @@ class Server:
                 self.proc.kill()
 
     def spawn(self, name):
-        self.ctx.run(f"player {name} spawn at {X} {Y} {Z}", r"joined the game|Player .* spawn|Unknown|Incorrect")
+        s.require_carpet(self.ctx)
+        self.ctx.run(f"player {name} spawn at {X} {Y} {Z}", r"joined the game|Player .* spawn")
         if not self.ctx.until(f"execute if entity @a[name={name}]"):
             raise SystemExit(f"simulated player {name} (Carpet) does not appear")
 
     def leave(self, name):
-        self.ctx.run(f"player {name} kill", r"left the game|Unknown|Incorrect")
+        self.ctx.run(f"player {name} kill", r"left the game")
         self.ctx.until(f"execute if entity @a[name={name}]", want=False)
 
     def books(self, name, version=None):
@@ -134,7 +135,7 @@ def main():
         # 3) /heraldia guide with one unique structure discovered; requested twice, there is still one
         ctx.run(f"advancement grant {PLAYER} only heraldia:unicas/{DISCOVERED}/descubrir", r"Granted|granted|Couldn't")
         for _ in range(2):
-            ctx.run(f"execute as {PLAYER} run heraldia guide", r"entregada a \w+ en \d+ µs|Unknown|Incorrect")
+            ctx.run(f"execute as {PLAYER} run heraldia guide", r"entregada a \w+ en \d+ µs")
         if srv.books(PLAYER, version) != 1:
             fails.append(f"after requesting it twice it carries {srv.books(PLAYER)} guides, not 1")
         else:
@@ -171,7 +172,7 @@ def main():
         srv.spawn(NEW_ITEM)
         if srv.books(NEW_ITEM):
             fails.append("with guia.entregar_al_entrar = false, a new player receives it on joining")
-        ctx.run(f"execute as {NEW_ITEM} run heraldia guide", r"entregada a \w+ en \d+ µs|Unknown|Incorrect")
+        ctx.run(f"execute as {NEW_ITEM} run heraldia guide", r"entregada a \w+ en \d+ µs")
         if srv.books(NEW_ITEM, version) != 1:
             fails.append("with the option disabled, /heraldia guide does not give the guide")
         srv.leave(NEW_ITEM)

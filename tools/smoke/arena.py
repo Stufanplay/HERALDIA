@@ -192,7 +192,8 @@ def first_start(p, pl):
     ctx.run("heraldia arena", r"Arena de oleadas en|Wave arena at")
 
     # 2. protection
-    ctx.run(f"player {P} spawn at {reap[0] + 0.5} {reap[1]} {reap[2] + 0.5}", r"joined the game|Player .* spawn|Unknown|Incorrect")
+    s.require_carpet(ctx)
+    ctx.run(f"player {P} spawn at {reap[0] + 0.5} {reap[1]} {reap[2] + 0.5}", r"joined the game|Player .* spawn")
     if not ctx.until(f"execute if entity @a[name={P}]"):
         raise SystemExit(f"simulated player {P} does not appear (Carpet)")
     ctx.run(f"gamemode survival {P}", r"Set .* game mode|game mode")
@@ -328,7 +329,8 @@ def first_start(p, pl):
     p.check(ctx.count('@e[type=item,nbt={Item:{id:"minecraft:diamond"}}]') == 0, "suelta sus diamantes al caer en el ruedo")
     p.check(ctx.count(f"@e[type=experience_orb,{nearby_flag}]") <= orbs_before, "suelta experiencia al caer en el ruedo")
     ctx.until(f"execute if entity @a[name={P}]", want=False, timeout=30)
-    ctx.run(f"player {P} spawn at {reap[0] + 0.5} {reap[1]} {reap[2] + 0.5}", r"joined the game|Player .* spawn|Unknown|Incorrect")
+    s.require_carpet(ctx)
+    ctx.run(f"player {P} spawn at {reap[0] + 0.5} {reap[1]} {reap[2] + 0.5}", r"joined the game|Player .* spawn")
     ctx.until(f"execute if entity @a[name={P}]")
     p.check(ctx.test(f'execute if entity @a[name={P},nbt={{Inventory:[{{id:"minecraft:diamond",count:7}}]}}]'),
             "pierde los diamantes al caer en el ruedo")
@@ -413,7 +415,7 @@ def herald_house(p, hp, arena_box):
     if sq:
         cx, cy, cz = o[0] + sq[0] + sq[3] // 2, o[1] + sq[1] + 1, o[2] + sq[2] + sq[3] // 2
         ctx.run(f"execute positioned {cx} {cy} {cz} run heraldia event start market",
-                r"starts in|Empieza el evento|not started|no cabe|No hay|There is no|room|sitio")
+                r"starts in|Empieza el evento|not started|no cabe|No hay|There is no|room|no hay sitio")
         p.check(p.wait_log(r"events: event \d+ starts: market in", timeout=30), "herald: no market day on the plaza")
         ctx.run("heraldia event stop all", r"stopped|parad|[Ee]vent")
     if SETTLE:

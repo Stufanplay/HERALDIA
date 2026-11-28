@@ -55,7 +55,7 @@ def with_chunk(ctx, x, z, f):
     try:
         return f()
     finally:
-        ctx.run(f"forceload remove {x} {z}", r"[Rr]emoved|[Uu]nmarked|force|not")
+        ctx.run(f"forceload remove {x} {z}", r"[Rr]emoved|[Uu]nmarked|force")
 
 
 def snapshot(world, chunks):
@@ -105,7 +105,7 @@ def main():
     # ------------------------------------------------------------------ arranque 1
     proc, ctx = me.start_up(a.work, launcher, cfg)
     try:
-        ctx.run("gamerule advance_time false", r"Gamerule|set to|now")
+        ctx.run("gamerule advance_time false", r"Gamerule|set to")
         t0 = time.time()
         me.load_data(ctx, zone)
         print(f"zona de {len(zone)} chunks generada en {time.time() - t0:.0f} s")
@@ -135,7 +135,7 @@ def main():
         check(len(before) == len(zone), f"solo {len(before)} de {len(zone)} chunks guardados enteros")
         # analyze no cambia nada
         n0 = len(ctx.seen)
-        ctx.run("heraldia update analyze", r"Analizando|Analysing|Unknown|Incorrect")
+        ctx.run("heraldia update analyze", r"Analizando|Analysing")
         m = wait_since(ctx, n0, r"update analyze: (\d+) chunks, (\d+) construcciones, (\d+) protegidos, (\d+) vírgenes \((\d+) se "
                        r"regenerarían\), (\d+) estructuras nuevas", 600)
         total, built, prot, virg, regen = (int(m.group(i)) for i in range(1, 6))
@@ -158,10 +158,10 @@ def main():
         ctx.run(f"data merge entity @e[tag={ZOMBIE},limit=1] {{IsBaby:1b}}", r"Modified|Unable|Nothing")
         # without forced chunks on restart: otherwise their fluids run before freezing the world (game changes)
         for x0, z0, x1, z1 in me.fragments(nearby):
-            ctx.run(f"forceload remove {x0} {z0} {x1} {z1}", r"[Rr]emoved|[Uu]nmarked|force|not")
+            ctx.run(f"forceload remove {x0} {z0} {x1} {z1}", r"[Rr]emoved|[Uu]nmarked|force")
         # apply: confirmation with id, with backup
         n0 = len(ctx.seen)
-        ctx.run("heraldia update apply", r"Analizando|Analysing|Unknown|Incorrect")
+        ctx.run("heraldia update apply", r"Analizando|Analysing")
         m = wait_since(ctx, n0, r"update apply confirm (\w+) backup", 600)
         ident = m.group(1)
         check(not os.path.exists(os.path.join(folder, "plan.json")), "apply sin confirmar ya ha dejado el plan")
@@ -213,27 +213,28 @@ def main():
         times = len(re.findall(r"Heraldia: arreglos \{marcas=CHANGES", log1 + "".join(ctx.seen)))
         check(times == 1, f"el arreglo de marcas se ha aplicado {times} veces (debía ser 1)")
         n0 = len(ctx.seen)
-        ctx.run("heraldia update repair dry-run", r"Prueba|Dry run|Unknown|Incorrect")
+        ctx.run("heraldia update repair dry-run", r"Prueba|Dry run")
         m = wait_since(ctx, n0, r"update repair dry-run: (\d+) mobs de plantilla revisados, (\d+) cambios (\{.*\})", 30)
         check("bebes=1/0" in m.group(3), f"repair dry-run no ve el bebé: {m.group(3)}")
         check(ctx.test(f"execute if entity @e[tag={ZOMBIE},nbt={{IsBaby:1b}}]"), "repair dry-run ha cambiado el guardián")
         n0 = len(ctx.seen)
-        ctx.run("heraldia update repair", r"Arreglos|Fixes|Unknown|Incorrect")
+        ctx.run("heraldia update repair", r"Arreglos|Fixes")
         wait_since(ctx, n0, r"update repair: \d+ mobs de plantilla revisados, [1-9]\d* cambios", 30)
         check(ctx.test(f"execute if entity @e[tag={ZOMBIE},nbt={{IsBaby:0b}}]"), "repair no ha hecho adulto al guardián")
         n0 = len(ctx.seen)
-        ctx.run("heraldia update repair dry-run", r"Prueba|Dry run|Unknown|Incorrect")
+        ctx.run("heraldia update repair dry-run", r"Prueba|Dry run")
         m = wait_since(ctx, n0, r"update repair dry-run: (\d+) mobs de plantilla revisados, (\d+) cambios", 30)
         check(m.group(2) == "0", f"tras repair aún quedan {m.group(2)} cambios (no es idempotente)")
         # configuration panel and preferences
-        ctx.run(f"player {PLAYER} spawn at 0 100 0", r"joined the game|Player .* spawn|Unknown|Incorrect")
+        s.require_carpet(ctx)
+        ctx.run(f"player {PLAYER} spawn at 0 100 0", r"joined the game|Player .* spawn")
         check(ctx.until(f"execute if entity @a[name={PLAYER}]"), "no aparece el jugador simulado (Carpet)")
         ctx.run(f"op {PLAYER}", r"Made .* operator|Nothing changed")
         ctx.run(f"execute as {PLAYER} run heraldia config", rf"panel de configuración abierto \({PLAYER}, principal\)|Unknown|Incorrect")
         check(re.search(rf"panel de configuración abierto \({PLAYER}, principal\)", "".join(ctx.seen)), "/heraldia config no abre el diálogo")
         ctx.run(f"execute as {PLAYER} run heraldia config menu combate", rf"abierto \({PLAYER}, combate\)|Unknown|Incorrect")
         check(re.search(rf"abierto \({PLAYER}, combate\)", "".join(ctx.seen)), "/heraldia config menu combate no abre el submenú")
-        ctx.run("heraldia config set arena.max_mobs_vivos 30", r"guardadas por|Valor no válido|Unknown|Incorrect")
+        ctx.run("heraldia config set arena.max_mobs_vivos 30", r"guardadas por|Valor no válido")
         with open(os.path.join(a.work, "config", "heraldia.json"), encoding="utf-8") as f:
             check(json.load(f).get("arena", {}).get("max_mobs_vivos") == 30, "config set no ha escrito el fichero")
         ctx.run(f"execute as {PLAYER} run heraldia language fr_fr", rf"idioma de {PLAYER}: fr_fr|Unknown|Incorrect")

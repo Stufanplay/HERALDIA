@@ -6,9 +6,11 @@ directly inside an `ast.Expr` statement -- that is, a `.run(...)` whose parent n
 thrown away. That is the whole measurement: no type checking, no import following, so an unrelated `something.run(...)`
 would be counted too.
 
-Why it is worth knowing: `server_smoke.run` waits for `ok` **or** `ERROR_PATTERN` and **returns** whichever came first,
-raising nothing. A caller that does not read what came back therefore accepts any failure of its command and carries on
-as if it had worked. `server_smoke.must` is the same wait with the reply asserted.
+Why it is worth knowing: `server_smoke.run` waits for `ok` **or** `ERROR_PATTERN` and, since it fails by default, raises
+when the reply matches `ERROR_PATTERN` and not `ok`. So a discarded reply no longer swallows such a failure -- **unless
+its own `ok` matches the failure reply**, on purpose (`...|Unknown|Incorrect`) or by accident of substring (`now` is
+inside `Unknown`, `not` matches `not loaded`): those still carry on as if the command had worked (97 of 708 when the
+switch landed, docs/LESSONS.md). Before the switch, `run` returned whichever came first and raised nothing.
 
 The caveat, which matters as much as the number: a discarded reply is not a fault by itself. Most of these commands are
 set-up (`forceload`, `fill`, `gamerule`, `tp`) and nothing later would be right if they had failed, so the test would

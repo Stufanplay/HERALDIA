@@ -411,7 +411,8 @@ def main():
         ctx.run(f"fill {wx - 6} {top - POND_DEPTH + 1} {z + 12} {wx + 6} {top} {z + 24} minecraft:water", r"filled|Successfully|No blocks")
         ctx.ticks(10)
         ctx.run(f"forceload remove {wx - 24} {z + 2} {wx + 24} {z + 30}", r"[Cc]hunk|unmarked|No")
-        ctx.run(f"player {P} spawn at {x} {y} {z}", r"joined the game|Unknown|Incorrect")
+        s.require_carpet(ctx)
+        ctx.run(f"player {P} spawn at {x} {y} {z}", r"joined the game")
         if not p.check(ctx.until(f"execute if entity @a[name={P}]"), "Carpet's player does not appear"):
             return 1
         # `place here` builds at the bot's block, and this test's y is 21 blocks above the natural ground (the surface
@@ -422,7 +423,7 @@ def main():
         # The block is at the plaza's centre, inside what the build levels and paves over.
         ctx.run(f"setblock {x} {y - 1} {z} minecraft:dirt", r"Changed the block|No blocks|Could not set")
         s.stand(ctx, P, x, y, z)
-        ctx.run(f"execute as {P} run heraldia herald place here", r"heraldia|Herald|Heraldo|place|confirm")
+        ctx.run(f"execute as {P} run heraldia herald place here", r"heraldia|Herald|Heraldo|confirm")
         ctx.run(f"execute as {P} run heraldia herald place confirm", r"Building the Herald's House|Construyendo la Casa del Heraldo")
         m = p.wait_log(PLACED, 900)
         if not p.check(m, "the town is not placed"):

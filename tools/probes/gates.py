@@ -37,9 +37,9 @@ def _opened(t):
 
 
 def _walk(g, sx, sz):
-    m = g.box[0]
-    starts = [(x, 0, z) for x in range(m, sx - m) for z in (m, sz - m - 1) if g.floor(x, 0, z) is not None]
-    starts += [(x, 0, z) for z in range(m, sz - m) for x in (m, sx - m - 1) if g.floor(x, 0, z) is not None]
+    m, y = g.box[0], g.base
+    starts = [(x, y, z) for x in range(m, sx - m) for z in (m, sz - m - 1) if g.floor(x, y, z) is not None]
+    starts += [(x, y, z) for z in range(m, sz - m) for x in (m, sx - m - 1) if g.floor(x, y, z) is not None]
     seen, todo = set(starts), list(starts)
     while todo:
         for c in g.neighbors(todo.pop()):
@@ -53,8 +53,9 @@ def analyse(t):
     """[place behind a gate: dict(cells, gates, spawns, beds, workstations, floor_y)] for one template."""
     from mediums import _paths as P
     sx, _, sz = t.size()
-    shut = P.Ground(t)
-    opened = P.Ground(_opened(t))
+    from ladders import level
+    shut = P.Ground(t, base=level(t))       # the ground at the height of the jigsaw that joins the piece (#86)
+    opened = P.Ground(_opened(t), base=level(t))
     a = _walk(shut, sx, sz)
     b = _walk(opened, sx, sz)
     behind = b - a

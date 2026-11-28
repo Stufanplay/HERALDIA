@@ -106,7 +106,8 @@ def main():
             if "not loaded" not in m.string:
                 break
             time.sleep(s.PLACE_RETRY_S)
-        ctx.run(f"player {PLAYER} spawn at {X} {Y} {Z}", r"joined the game|Player .* spawn|Unknown|Incorrect")
+        s.require_carpet(ctx)
+        ctx.run(f"player {PLAYER} spawn at {X} {Y} {Z}", r"joined the game|Player .* spawn")
         if not until(f"execute if entity @a[name={PLAYER}]"):
             raise SystemExit(f"simulated player {PLAYER} (Carpet) does not appear")
         ctx.run(f"gamemode survival {PLAYER}", r"Set .* game mode|game mode")
@@ -150,7 +151,9 @@ def main():
             else:
                 ok += 1
             print(f"sheet {sid} (chest {d['cofre'][0]}) -> {d['siguiente']}")
-        ctx.run(f"player {PLAYER} kill", r"left the game|Unknown|Incorrect|.")
+        # clean-up before stopping: a player already gone ("Can only manipulate existing players") is as good as one
+        # that leaves; the `.` this pattern used to end in accepted any line at all, so it waited for nothing
+        ctx.run(f"player {PLAYER} kill", r"left the game|Can only manipulate existing players")
     finally:
         if proc.poll() is None:
             s.send(proc, "stop")

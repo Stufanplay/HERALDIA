@@ -71,9 +71,11 @@ def as_player(ctx, cmd, ok):
 SURFACE_TP = "positioned over motion_blocking_no_leaves run tp"
 # The three replies this teleport can give. All three are listed so the wait ends promptly on each, and only the first
 # is accepted afterwards: `No entity was found` is NOT in `ERROR_PATTERN`, so leaving it out of `ok` would make the wait
-# run its full COMMAND_TIMEOUT_S (300 s) instead of failing. When `run()` fails by default, the `not loaded` half of
-# the check below becomes redundant and can go; the `No entity` half may NOT, for that same reason.
+# run its full COMMAND_TIMEOUT_S (300 s) instead of failing. `run()` now fails by default, but only on a reply `ok` does
+# not accept: `not loaded` stays in `ok` because the retry needs it back, so the check below still has to reject it,
+# and `No entity` too.
 _TP_REPLIES = r"Teleported|No entity|not loaded"
+ONFLOOR_TICKS = 200           # how long a player teleported into an unloaded column is given for it to load (10 s of game)
 
 
 def on_floor(ctx, sel, x, z):
@@ -93,12 +95,23 @@ def on_floor(ctx, sel, x, z):
 
     Deliberately minimal: the path that works today is untouched (same command, same coordinates), the retry only
     happens where the test used to do nothing at all, and nothing here waits for the entity to settle -- that would
-    change what is observed, not just whether it is checked."""
+    change what is observed, not just whether it is checked. What the retry does wait for is the player's own column
+    to load, which is a precondition of the teleport and not part of what is observed."""
     cmd = f"execute positioned {x} 300 {z} {SURFACE_TP} {sel} ~ ~ ~"
     m = ctx.run(cmd, _TP_REPLIES)
     if "not loaded" in m.string and not sel.startswith("@"):      # a player loads its own column; an entity cannot
         ctx.run(f"tp {sel} {x} 300 {z}", r"Teleported|No entity")
-        m = ctx.run(cmd, _TP_REPLIES)
+        # The player's arrival loads the column, but not by the next command on a loaded runner: in CI the retry
+        # straight after the absolute `tp` still answered `not loaded` (#155, Servidor · caravans + quests), and it
+        # did locally with several servers sharing the machine. So the retry waits for it, a few ticks at a time and
+        # for at most ONFLOOR_TICKS -- game ticks, not seconds, so a slow server gets the same chance as a fast one.
+        for waited in range(0, ONFLOOR_TICKS + 1, 10):
+            m = ctx.run(cmd, _TP_REPLIES)
+            if "not loaded" not in m.string:
+                break
+            ctx.ticks(10)
+        print(f"on_floor: {sel}'s column at ({x}, {z}) {'loaded' if 'not loaded' not in m.string else 'still not loaded'}"
+              f" after the absolute tp and {waited} ticks")
     if "Teleported" not in m.string:
         raise SystemExit(f"on_floor: {sel} did not reach the surface of ({x}, {z}): {m.string.strip()[-120:]}")
 
@@ -259,11 +272,54 @@ def lost(ctx, fails, route):
     if m.group(1) != "perdida":
         fails.append(f"when the merchant is killed the caravan ends as '{m.group(1)}' (it should be lost)")
     if floor:
-        fails.append(f"when the caravan is lost, {floor} items remain on the ground (no exploitation loot)")
+        fails.append(f"when the caravan is lost, {floor} items remain on the ground (no exploitation loot): "
+                     + "; ".join(ground_items(ctx, p, floor)))
     if ctx.count(f"@e[tag={TAG}]"):
         fails.append("when lost, caravan entities remain")
     if len(re.findall(r" cobra \d+ esmeraldas", ctx.log())) != before:
         fails.append("a lost caravan has paid out")
+
+
+def _fields(snbt, names):
+    """`name: value` for each of `names` found at the top level of an entity's SNBT, the value taken whole (balanced
+    brackets), so a long `Item` with components does not push `Thrower` out of a truncated message."""
+    out = []
+    for name in names:
+        i = snbt.find(f"{name}: ")
+        if i < 0:
+            continue
+        j = k = i + len(name) + 2
+        depth = 0
+        while k < len(snbt):
+            ch = snbt[k]
+            if ch in "{[":
+                depth += 1
+            elif ch in "}]":
+                if depth == 0:
+                    break
+                depth -= 1
+            elif ch == "," and depth == 0:
+                break
+            k += 1
+        out.append(f"{name}: {snbt[j:k]}")
+    return ", ".join(out) or snbt.strip()[:400]
+
+
+def ground_items(ctx, p, n, radius=24):
+    """What the items on the ground near `p` are, not just how many: each one's `Item`, where it lies, its `Age` and,
+    when the game records it, who dropped it (`Thrower`), so that a red names what was left behind. Seen
+    once in a full local pass (1 of 71 tests, 3 of 3 green on repeating it) as a bare "1 items remain", with nothing to
+    tell what it was. Each item read is tagged so the next read takes another one."""
+    seen_tag, out = "caravans_leido", []
+    for _ in range(min(n, 5)):
+        sel = (f"@e[type=minecraft:item,x={p[0]:.0f},y={p[1]:.0f},z={p[2]:.0f},distance=..{radius},"
+               f"tag=!{seen_tag},sort=nearest,limit=1]")
+        m = ctx.run(f"data get entity {sel}", r"has the following entity data: (.*)|No entity was found")
+        if not m.group(1):
+            break
+        out.append(_fields(m.group(1), ("Item", "Pos", "Thrower", "Age")))
+        ctx.run(f"tag {sel} add {seen_tag}", r"Added tag|No entity was found")
+    return out or ["(none could be read)"]
 
 
 def far(ctx, fails, route):

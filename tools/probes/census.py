@@ -19,19 +19,21 @@ def is_village(kind):
 def analyse(t):
     """(ladders_from_ground, [(ladder, n_stranded_cells, max_drop)]) for one template."""
     from mediums import _paths as P
-    g = P.Ground(t)
+    from ladders import level
+    y = level(t)                 # the ground at the height of the jigsaw that joins the piece, as the audit (#86)
+    g = P.Ground(t, base=y)
     sx, _, sz = t.size()
     m = P.MARGIN
     # the flat ground modelled around the template: start the walk from the outer ring
     starts = []
     for x in range(-m, sx + m):
         for z in (-m, sz + m - 1):
-            if g.floor(x, 0, z) is not None:
-                starts.append((x, 0, z))
+            if g.floor(x, y, z) is not None:
+                starts.append((x, y, z))
     for z in range(-m, sz + m):
         for x in (-m, sx + m - 1):
-            if g.floor(x, 0, z) is not None:
-                starts.append((x, 0, z))
+            if g.floor(x, y, z) is not None:
+                starts.append((x, y, z))
     if not starts:
         return 0, [], 0
     walk, todo = set(starts), list(starts)
@@ -101,11 +103,13 @@ def analyse(t):
 def stranded_cells(t):
     """The cells a villager reaches by climbing but its search cannot walk back from, for one template."""
     from mediums import _paths as P
-    g = P.Ground(t)
+    from ladders import level
+    y = level(t)
+    g = P.Ground(t, base=y)
     sx, _, sz = t.size()
     m = P.MARGIN
-    starts = [(x, 0, z) for x in range(-m, sx + m) for z in (-m, sz + m - 1) if g.floor(x, 0, z) is not None]
-    starts += [(x, 0, z) for z in range(-m, sz + m) for x in (-m, sx + m - 1) if g.floor(x, 0, z) is not None]
+    starts = [(x, y, z) for x in range(-m, sx + m) for z in (-m, sz + m - 1) if g.floor(x, y, z) is not None]
+    starts += [(x, y, z) for z in range(-m, sz + m) for x in (-m, sx + m - 1) if g.floor(x, y, z) is not None]
     if not starts:
         return set()
     walk, todo = set(starts), list(starts)

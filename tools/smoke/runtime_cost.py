@@ -57,6 +57,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import server_smoke as s
 import modrinth
 from generation_cost import chunky, percentile
+import cost_status                  # noqa: E402  (tools/cost_status.py, on sys.path through generation_cost)
 
 REFERENCE = os.path.join(s.ROOT, "tools", "smoke", "runtime_reference.json")
 SAMPLER = os.path.join(s.ROOT, "tools", "smoke", "TickSampler.java")
@@ -611,27 +612,61 @@ class Pass:
 
 def sweep(work, jar, with_it, launcher, pos, seconds, warmup, escalation):
     """One pass: {"escenarios": {...}, "escalada": [...]} and the positions (found here if `pos` is None)."""
+    label = "with" if with_it else "without"
+    cost_status.phase(f"pass {label} Heraldia: starting the server")
     p = Pass(work, jar, with_it, launcher)
     try:
         if pos is None:
+            cost_status.phase(f"pass {label} Heraldia: finding the positions")
             if not with_it:
                 raise SystemExit("the first pass must be with Heraldia (it finds the positions)")
             pos = p.find_positions()
             pos["camino"] = p.find_road_point(pos)
             pos["arena_plano"] = arena_blueprint(jar)
+        cost_status.phase(f"pass {label} Heraldia: generating the scenarios' areas")
         for name in ("aldea", "aldea_b", "campo", "aldea_vanilla", "camino", "arena", "mediana", "casa_heraldo"):
             p.pregen(name, pos[name])
         # a clean start: what Chunky generated is unloaded and saved, and the scenarios start from the saved world
         p.stop()
+        keep_log(work, f"{label}-pregen")         # the restart below deletes logs/
+        cost_status.phase(f"pass {label} Heraldia: restarting on the saved world")
         p = Pass(work, jar, with_it, launcher, fresh=False)
         out = {"escenarios": {}}
         for sc in SCENARIOS:
+            cost_status.phase(f"pass {label} Heraldia: scenario {sc}")
             out["escenarios"][sc] = p.scenario(sc, pos, seconds, warmup)
         if escalation and with_it:
+            cost_status.phase(f"pass {label} Heraldia: escalation")
             out["escalada"] = escalate(p, pos)
         return out, pos
     finally:
+        cost_status.note("stopping the server")
         p.stop()
+        keep_log(work, label)
+
+
+OUTPUT = None        # --output: where each server's log and the passes measured so far are kept as they finish
+_logs = 0
+_measured = []       # every pass of this run, both rounds (measure() starts its lists afresh on a retry)
+
+
+def keep_log(work, label):
+    """Copies the server log to OUTPUT/logs/NN-<label>.log before the next start deletes it (a run that dies later
+    keeps it)."""
+    global _logs
+    log = os.path.join(work, "logs", "latest.log")
+    if OUTPUT and os.path.isfile(log):
+        _logs += 1
+        os.makedirs(os.path.join(OUTPUT, "logs"), exist_ok=True)
+        shutil.copy(log, os.path.join(OUTPUT, "logs", f"{_logs:02d}-{label}.log"))
+
+
+def keep_partial(with_it, r, pos):
+    """Adds one measured pass to OUTPUT/coste_juego.parcial.json (rewritten after each pass, both rounds kept)."""
+    _measured.append({"con": with_it, **r})
+    if OUTPUT:
+        with open(os.path.join(OUTPUT, "coste_juego.parcial.json"), "w", encoding="utf-8") as f:
+            json.dump({"pasadas": _measured, "posiciones": pos}, f, ensure_ascii=False, indent=1)
 
 
 def escalate(p, pos):
@@ -676,8 +711,12 @@ def measure(jar, work, sweeps, seconds, warmup, escalation, pos=None):
         r, pos = sweep(work, jar, True, launcher, pos, seconds, warmup, escalation and i == 0)
         con.append(r["escenarios"])
         esc += r.get("escalada") or []
+        keep_partial(True, r, pos)
+        cost_status.phase(f"pass {i + 1} with Heraldia measured")
         r, _ = sweep(work, jar, False, launcher, pos, seconds, warmup, False)
         sin.append(r["escenarios"])
+        keep_partial(False, r, pos)
+        cost_status.phase(f"pass {i + 1} without Heraldia measured")
     return con, sin, esc, pos
 
 
@@ -748,6 +787,10 @@ def main(argv=None):
     ap.add_argument("--no-retry", action="store_true")
     ap.add_argument("--from-json", help="does not measure: uses this coste_juego.json (e.g. the CI artifact)")
     a = ap.parse_args(argv)
+    global OUTPUT
+    if not a.from_json:
+        OUTPUT = os.path.abspath(a.output)
+        cost_status.start(OUTPUT, "juego")
     if a.scenarios:
         SCENARIOS[:] = [sc for sc in SCENARIOS if sc in a.scenarios.split(",")]
     ref = read_reference(a.reference)
@@ -761,13 +804,16 @@ def main(argv=None):
         con, sin, esc, pos = measure(jar, work, a.sweeps, a.seconds, a.warmup, not a.no_escalation)
         result = result_of(con, sin, esc, pos, a.seconds)
         comparison = compare(result, ref)
+        cost_status.phase(f"first round compared: {comparison[1]}")
         if not comparison[0] and not a.no_threshold and not a.no_retry and not a.update_reference:
+            cost_status.phase("over the limit: one more round of passes")
             print("over the limit: one more round of passes", flush=True)
             c2, s2, _, _ = measure(jar, work, 1, a.seconds, a.warmup, False, pos)
             raw = result["crudo"]
             result = result_of(raw["con"] + c2, raw["sin"] + s2, raw["escalada"], pos, a.seconds)
     comparison = compare(result, ref)
     print(write(result, comparison, a.output))
+    cost_status.finish(comparison[0], comparison[1])
     if a.update_reference:
         with open(a.reference, "w", encoding="utf-8") as f:
             json.dump(new_reference(result, ref), f, ensure_ascii=False, indent=1)
@@ -778,4 +824,4 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(cost_status.guard(main))

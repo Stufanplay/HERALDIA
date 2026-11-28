@@ -387,3 +387,86 @@ def test_aquatic_dry():
     assert AQUATIC not in pick(J + "mines/Hillside.java")[1]
     assert AQUATIC not in pick("tools/gen/uniques/castle/__init__.py")[1]
     assert sel.DURATION_S[AQUATIC] > 0
+
+
+def test_the_cost_jobs_say_why_they_run_or_not():
+    """The reason CI prints for each cost job names the files that decided it, and says so when none did."""
+    assert sel.why([], sel.COST_PATHS, "COST_PATHS", True).startswith("full suite")
+    r = sel.why(["docs/CONTENT.md", "tools/smoke/roads.py"], sel.COST_PATHS, "COST_PATHS")
+    assert r.startswith("none of the 2 changed file(s) is in COST_PATHS")
+    r = sel.why(["tools/gen/houses.py", "README.md"], sel.RUNTIME_PATHS, "RUNTIME_PATHS")
+    assert r == "1 changed file(s) in RUNTIME_PATHS: tools/gen/houses.py"
+    assert sel.why(["tools/gen/tests/test_x.py"], sel.COST_PATHS, "COST_PATHS").startswith("none")   # COST_WITHOUT
+    many = [f"tools/gen/f{i}.py" for i in range(7)]
+    assert sel.why(many, sel.COST_PATHS, "COST_PATHS").endswith("(+2 more)")
+
+
+# Real files whose change must make the cost job measure: if a rule of COST_PATHS / RUNTIME_PATHS is lost or cost() /
+# runtime() stop answering yes, a skip "by path" would lie (the job goes green unmeasured), so these must stay true.
+MUST_COST = ["tools/smoke/generation_cost.py", "tools/smoke/cost_reference.json", "tools/gen/houses.py", "gradle.properties",
+             J + "villages/Clearing.java", J + "mixin/ChunkGeneratorMixin.java", J + "mixin/StructureCheckMixin.java"]
+MUST_RUNTIME = ["tools/smoke/runtime_cost.py", "tools/smoke/TickSampler.java", "tools/smoke/runtime_reference.json",
+                "tools/gen/houses.py", J + "Heraldia.java", J + "arena/Arena.java", J + "mixin/VillagerPricesMixin.java",
+                "tools/gen/mediums/__init__.py", "gradle.properties"]
+
+
+def test_a_change_the_cost_depends_on_always_measures():
+    """cost()/runtime() say yes for every rule of COST_PATHS / RUNTIME_PATHS (one path per rule, derived from it) and
+    for the real files above; and --ci-matrix's own check (check_decision) agrees: a skip that would lie is caught twice."""
+    for paths, decide, name, must in ((sel.COST_PATHS, sel.cost, "COST_PATHS", MUST_COST),
+                                      (sel.RUNTIME_PATHS, sel.runtime, "RUNTIME_PATHS", MUST_RUNTIME)):
+        for rule in paths:
+            f = rule.replace("*", "Example.java" if rule.startswith("src/") else "example.py")
+            assert decide([f]), (name, rule, f)
+            assert sel.check_decision(True, [f], paths, name) is None
+            assert "skip" in sel.check_decision(False, [f], paths, name)        # the lie, caught
+        for f in must:
+            assert os.path.isfile(os.path.join(TOOLS, "..", f)), f
+            assert decide([f]) and decide(["docs/CONTENT.md", f]), (name, f)
+        assert not decide(["docs/CONTENT.md", "tools/gen/tests/test_x.py", "tools/gen/render.py"]), name
+        assert sel.check_decision(False, ["docs/CONTENT.md"], paths, name) is None
+        assert "run" in sel.check_decision(True, ["docs/CONTENT.md"], paths, name)
+
+
+def test_ci_matrix_refuses_a_lying_skip(monkeypatch, capsys):
+    """If cost() answered no for a diff that touches COST_PATHS, --ci-matrix exits 1 (seleccion goes red) instead of
+    printing cost=false (which would leave the cost job green, "skipped by path", unmeasured)."""
+    monkeypatch.setattr(sel, "changed_list", lambda base: ["tools/smoke/generation_cost.py"])
+    assert sel.main(["--ci-matrix", "--base", "x"]) == 0
+    assert json.loads(capsys.readouterr().out)["cost"] is True
+    monkeypatch.setattr(sel, "cost", lambda changes: False)            # a broken selector
+    assert sel.main(["--ci-matrix", "--base", "x"]) == 1
+    assert "SELECTOR ERROR" in capsys.readouterr().err
+    monkeypatch.setattr(sel, "runtime", lambda changes: False)
+    assert sel.main(["--ci-matrix", "--full"]) == 0                    # the full suite does not ask cost()...
+
+
+def ci_jobs():
+    import yaml
+    with open(os.path.join(TOOLS, "..", ".github", "workflows", "ci.yml"), encoding="utf-8") as f:
+        return yaml.safe_load(f)["jobs"]
+
+
+def test_ci_wires_the_decision_to_the_right_job_and_a_failed_measurement_fails_it():
+    """ci.yml: `coste` measures iff seleccion's `coste` (from --ci-matrix "cost") is 'true', `juego` iff `juego` ("runtime");
+    the skip step runs only on 'false'; and nothing (continue-on-error, `|| true`) can turn a failed measurement green: the
+    verdict step (if: always()) reports, it does not decide the job."""
+    jobs = ci_jobs()
+    run = "\n".join(st.get("run", "") for st in jobs["seleccion"]["steps"])
+    assert 'echo "coste=$(echo "$m" | python3 -c \'import json,sys; print("true" if json.load(sys.stdin)["cost"]' in run
+    assert 'echo "juego=$(echo "$m" | python3 -c \'import json,sys; print("true" if json.load(sys.stdin)["runtime"]' in run
+    for job, output, script in (("coste", "coste", "generation_cost.py"), ("juego", "juego", "runtime_cost.py")):
+        j = jobs[job]
+        # a fixed name: an expression in it is left raw when seleccion fails, and a required check is matched by name
+        assert "${{" not in j["name"] and j["name"].startswith(("Coste de generación", "Coste de jugar")), (job, j["name"])
+        assert "if" not in j and j["env"]["MIDE"] == "${{ needs.seleccion.outputs.%s }}" % output, job
+        assert "continue-on-error" not in j, job
+        steps = j["steps"]
+        measure = [st for st in steps if script in st.get("run", "")]
+        assert len(measure) == 1 and measure[0]["if"] == "env.MIDE == 'true'" and measure[0]["id"] == "medir", job
+        assert "||" not in measure[0]["run"] and "continue-on-error" not in measure[0], job
+        skip = [st for st in steps if "cost_status.py skip" in st.get("run", "")]
+        assert len(skip) == 1 and skip[0]["if"] == "env.MIDE == 'false'", job
+        verdict = [st for st in steps if "cost_status.py verdict" in st.get("run", "")]
+        assert len(verdict) == 1 and verdict[0]["if"] == "always()" and "continue-on-error" not in verdict[0], job
+        assert steps.index(verdict[0]) > steps.index(measure[0]), job

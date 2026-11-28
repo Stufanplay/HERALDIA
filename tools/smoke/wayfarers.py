@@ -191,7 +191,8 @@ def kill_hunter(ctx, fails, w):
     rep = re.search(rf"encargos: {PLAYER} mata a un viajero \(cazador\) de (.+?): reputación (-?\d+)", ctx.log())
     print(f"the hunter killed: {m.group(0)}; {floor} items on the ground; {rep and rep.group(0)}")
     if m.group(1) != "perdida" or floor or ctx.count(f"@e[tag={TAG}]"):
-        fails.append(f"killing the hunter: {m.group(0)}, {floor} items on the ground, {ctx.count(f'@e[tag={TAG}]')} entities left")
+        fails.append(f"killing the hunter: {m.group(0)}, {floor} items on the ground, {ctx.count(f'@e[tag={TAG}]')} entities left"
+                     + (": " + "; ".join(cv.ground_items(ctx, p, floor)) if floor else ""))
     if not rep or rep.group(1) != w["origen"]:
         fails.append("killing the hunter costs no reputation with its village")
 

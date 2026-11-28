@@ -231,7 +231,7 @@ def main():
     shutil.copy(fetch(a.work, *CARPET), os.path.join(a.work, "mods"))
     proc, ctx = at.start_server(a.work, launcher, PROPS)
     try:
-        ctx.run("gamerule spawn_mobs false", r"Gamerule|set to|now")
+        ctx.run("gamerule spawn_mobs false", r"Gamerule|set to")
         player(ctx)
         bell(ctx, fails)
         siren(ctx, fails)

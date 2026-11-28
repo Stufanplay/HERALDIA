@@ -192,7 +192,8 @@ def main():
               {k: len(v.get("markers", [])) for k, v in c.items()})
         medium = next((e for e in reg if e["capa"] == "medianas"), None)
         if medium:
-            srv.run(f"player {PLAYER} spawn at {medium['x']} {medium['y']} {medium['z']}", r"joined the game|already|Unknown|Incorrect")
+            s.require_carpet(srv)
+            srv.run(f"player {PLAYER} spawn at {medium['x']} {medium['y']} {medium['z']}", r"joined the game|already")
             s.send(srv.proc, f"gamemode creative {PLAYER}")     # no suffocation or falls; it does not always answer on the console
             c = wait_layers(port, lambda c: c.get("medianas", {}).get("markers"))
             marks = c.get("medianas", {}).get("markers", [])

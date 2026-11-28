@@ -95,7 +95,8 @@ def start_up(work, launcher, hour):
         ctx.run(f"gamerule {rule} false", rf"[Gg]ame ?rule .*{rule}")
     ctx.run(f"time set {hour}", rf"Set .*{hour}")     # at the same time it already has, /time set does not respond
     ctx.run("difficulty normal", r"difficulty|Difficulty")
-    ctx.run(f"player {PLAYER} spawn at {X} {Y} {Z}", r"joined the game|Player .* spawn|Unknown|Incorrect")
+    s.require_carpet(ctx)
+    ctx.run(f"player {PLAYER} spawn at {X} {Y} {Z}", r"joined the game|Player .* spawn")
     if not ctx.until(f"execute if entity @a[name={PLAYER}]"):
         raise SystemExit(f"simulated player {PLAYER} does not appear (Carpet)")
     # Carpet creates it in creative from the console, and /gamemode to the same mode does not respond: it goes through survival

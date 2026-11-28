@@ -63,7 +63,7 @@ def main():
                 if "not loaded" not in m.string:
                     break
                 time.sleep(s.PLACE_RETRY_S)
-            s.run(proc, lines, seen, f"forceload remove {x} {z}", r"Unmarked|force|not")
+            s.run(proc, lines, seen, f"forceload remove {x} {z}", r"Unmarked|force")
             if "Test " not in m.group(0) or ("passed" in m.group(0)) != inside:
                 fails.append(f"{biome} {'should' if inside else 'should not'} be in #heraldia:{tag}: {m.string.strip()}")
             else:

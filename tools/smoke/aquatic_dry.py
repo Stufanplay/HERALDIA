@@ -242,7 +242,7 @@ def main():
     proc, ctx = ew.start_up(a.work, launcher, CONFIG)
     failures, areas = [], {}
     try:
-        ctx.run("gamerule random_tick_speed 3", r"Gamerule|set to|now")
+        ctx.run("gamerule random_tick_speed 3", r"Gamerule|set to")
         for label, target, half in TARGETS:
             if target is None:
                 m = ATLANTIS_LOG.search(ctx.log())

@@ -146,7 +146,8 @@ def guide_talk(srv, p):
     g = ctx.pos(GUIDE)
     if not p.check(g, "guide: no guide to talk to"):
         return
-    srv.ctx.run(f"player {P} spawn at {g[0]:.1f} {g[1]:.1f} {g[2] + 1.5:.1f}", r"joined the game|Unknown|Incorrect")
+    s.require_carpet(srv.ctx)
+    srv.ctx.run(f"player {P} spawn at {g[0]:.1f} {g[1]:.1f} {g[2] + 1.5:.1f}", r"joined the game")
     ctx.until(f"execute if entity @a[name={P}]")
     ctx.run(f"execute as {P} run heraldia talk with {GUIDE[:-1]},limit=1]", SEES + "|no longer|cannot open")
     m = re.findall(SEES, ctx.log())
@@ -163,7 +164,7 @@ def guide_talk(srv, p):
     p.check(p.wait_times(SEES, 3, 20), "guide: [Farewell] shows no last page")
     p.check(re.findall(SEES, ctx.log())[-1][2] == "close", "guide: the last page is not just [Close]")
     p.check("<" + P + ">" not in ctx.log(), "guide: something went to the chat")
-    srv.ctx.run(f"player {P} kill", r"left the game|Unknown|Incorrect")
+    srv.ctx.run(f"player {P} kill", r"left the game")
 
 
 def world_a(work, launcher, fails, texts):
