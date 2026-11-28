@@ -393,7 +393,7 @@ FIT_CONFIG = {"aldeas": {"separacion_bloques": NATURAL_GRID, "maximo": 100, "cam
               "caravanas": {"activado": False}, "viajeros": {"activado": False}, "medianas": {"activadas": False}}
 FIT_RADIUS = 104          # forced and read around the village start (the pieces of a standard village reach ~90 blocks)
 FIT_GRADE_OK = 0.85       # share of grading points whose ground is where it was asked (± 1; 27 of 29 in the test village)
-FIT_DOORS_OK = 0.9        # share of buildings whose door is within a step of its street
+FIT_DOORS_OK = 0.9        # share of buildings whose door is within a step of its street (read by `street_ground`)
 FIT_MAX_TREES = 10        # natural trunks left on the pieces (the forest villages had 60-170 before the clearing)
 SOIL = ("grass_block", "dirt", "podzol", "mud", "coarse_dirt", "rooted_dirt", "moss_block", "snow_block", "mycelium")
 
@@ -432,30 +432,161 @@ def inside(bb, x, z, margin=0):
     return bb[0] - margin <= x <= bb[3] + margin and bb[2] - margin <= z <= bb[5] + margin
 
 
-def street_ground(blocks, x, z, top, rigid_boxes):
+def street_ground(blocks, x, z, top, rigid_boxes, read=None):
     """`ground` that reads the street, not what stands on it: the blocks inside the box of a rigid piece (a filler, a
     terminator's tower, a building) are skipped, so a piece placed over the street column does not count as its ground.
     `ground` takes the highest block of the column, which there is the top of that piece (a well over an avenue, a
-    tower over a street: measured with the doors named, Nov 2026). For the INFORMATIVE door figure only."""
+    tower over a street: measured with the doors named, Nov 2026). The doors of the fit are read with it.
+
+    The skip is by BOX, not by block, and that is worth saying out loud: a village piece's box spans its whole height
+    while most of its columns are air (eaves, overhangs, the 15-row tower with hollow corners), so a street that is
+    perfectly walkable can be skipped just the same and what lies under it read instead. Nor is any headroom asked for:
+    the highest ground of the window wins, so a rock ceiling over a walkable street outranks the paving one row under
+    the door. (The gate does not read it that way any more: `street_step` asks whether a villager can stand somewhere
+    in the column. This one is kept for the report.)
+
+    No bound can be put on when the skip reaches the paving, and the attempt that was here is removed (#96): it said
+    that a piece standing on the street has its box floor over the paving, so the skip could never reach the paving row.
+    That rests on the paving being at the floor of the street's own box, and it is not. A `terrain_matching` piece's
+    projection carries a `GravityProcessor(WORLD_SURFACE_WG, -1)` of its own, which drops every block of the piece to
+    the heightmap of its own column, so its box is nominal: in the seed-s4 village `avenues/c` has its box at y 79..84
+    with not one block on row 79 and its paving at 75. Nothing follows from comparing a rigid box's floor with "street
+    level", because street level is not where the box says.
+
+    One number cannot tell those columns apart, and this function does not try to: what it returns and what the gate
+    compares are unchanged. `read` (a dict) is filled in with what was read instead, so the report can tell them apart:
+    `y` and `name` of the ground taken (`y` None if none), `skipped` rows skipped inside rigid boxes, `boxes` the boxes
+    that skipped them, and `below_skip` whether the ground returned lies below a skipped row (the street read past)."""
+    skipped, boxes, past = 0, [], False
     for y in range(top, top - 64, -1):
-        if any(b[0] <= x <= b[3] and b[1] <= y <= b[4] and b[2] <= z <= b[5] for b in rigid_boxes):
+        hit = [b for b in rigid_boxes if b[0] <= x <= b[3] and b[1] <= y <= b[4] and b[2] <= z <= b[5]]
+        if hit:
+            skipped += 1
+            past = True
+            boxes += [b for b in hit if b not in boxes]
             continue
-        if _is_ground(blocks.get((x, y, z), "minecraft:air")):
+        name = blocks.get((x, y, z), "minecraft:air")
+        if _is_ground(name):
+            if read is not None:
+                read.update(y=y, name=name, skipped=skipped, boxes=boxes, below_skip=past)
             return y
+    if read is not None:
+        read.update(y=None, name=None, skipped=skipped, boxes=boxes, below_skip=False)
     return None
 
 
-def fit_figures(blocks, pieces, bad_doors=None, street=None):
-    """(graded points ok, total), (doors ok, total), natural trunks on the pieces. With `bad_doors` (a list), each door
-    that is not within a step of its street is appended to it: (piece, its box, the street column, the step). With
-    `street` (a dict), the same doors read with `street_ground` (the street under any piece placed on it) go into it as
-    ok, n and bad: an informative figure, which the test prints and never compares (the gate is the first one)."""
+def read_note(read):
+    """What `street_ground` read in a column, in words: a count alone cannot tell one mechanism from four accidents, and
+    neither can one height. Names the block (the gate counts water as ground, so a hole "with water" has to say so),
+    how many rows were skipped inside the boxes of rigid pieces and whether the street was read past under them."""
+    n = len(read["boxes"])
+    boxes = f"{n} rigid box{'' if n == 1 else 'es'} {read['boxes']}"
+    skipped = f"{read['skipped']} rows skipped inside {boxes}" if read["skipped"] else "no rows skipped"
+    tail = ""
+    if "surfaces" in read and not read["surfaces"]:
+        tail += "; no walkable surface in the column"
+    if read.get("parent"):
+        tail += f"; hangs from {read['parent']} box {read['parent_bb']}"
+    if read["y"] is None:
+        return (f"nothing read in the 64 rows: {skipped}" if read["skipped"] < 64
+                else f"every one of the 64 rows fell inside {boxes}") + tail
+    note = f"ground {read['name']} at y={read['y']}, {skipped}" + (", read below them" if read["below_skip"] else "")
+    if "surfaces" in read:
+        ys = read["surfaces"]
+        note += f"; walkable surfaces {ys}" if ys else "; no walkable surface in the column"
+    if read.get("parent"):
+        note += f"; hangs from {read['parent']} box {read['parent_bb']}"
+    return note
+
+
+HEADROOM = 2        # rows a villager needs free over the block it stands on (it is 1.95 blocks tall)
+
+
+def _in_the_way(name):
+    """Does this block stop a villager standing where it is? Collision, and only collision: a block with no collision
+    box above an eighth (`ground_blocks`, #98) does not, and anything else does, including a block the table does not
+    name (another mod's), as `_is_ground` also counts those as ground.
+
+    This is NOT `_is_ground` negated, and the difference is the whole point. `_is_ground` leaves the registry's tree and
+    plant tags out on purpose, so that a flower on the paving is not taken for the ground of the column. But **a log and
+    leaves are in those tags too, and they do have a collision box**: judging headroom with `_is_ground` would count a
+    tree trunk straight in front of a door as free room to stand (#96), and trees on village pieces are the very thing
+    `FIT_MAX_TREES` exists for."""
+    return name not in ground_blocks.table()["no_collision_box"]
+
+
+def walkable_surfaces(blocks, x, z, top, rigid_boxes):
+    """Rows of the column a villager could stand on, highest first: ground (`_is_ground`) with `HEADROOM` rows over it
+    that nothing is in the way of (`_in_the_way`). Rows inside the box of another rigid piece are skipped as in
+    `street_ground` -- for the ground and for the headroom alike -- because a piece placed on the street is not the
+    street (#93): under a terminator's tower the paving still counts, and the tower's own top does not."""
+    def skipped(y):
+        return any(b[0] <= x <= b[3] and b[1] <= y <= b[4] and b[2] <= z <= b[5] for b in rigid_boxes)
+
+    def ground_at(y):
+        return not skipped(y) and _is_ground(blocks.get((x, y, z), "minecraft:air"))
+
+    def blocked_at(y):
+        return not skipped(y) and _in_the_way(blocks.get((x, y, z), "minecraft:air"))
+
+    return [y for y in range(top, top - 64, -1)
+            if ground_at(y) and not any(blocked_at(y + k) for k in range(1, HEADROOM + 1))]
+
+
+def street_step(blocks, x, z, floor, rigid_boxes, read=None):
+    """The step from a door's floor row to its street, by the rule the owner set (#96): a door fits when the column
+    holds **some** walkable ground within a step of the door, not when the highest block of the column happens to be
+    there. The highest block is not the question a villager asks -- a rock ceiling over a walkable street, or a street
+    on an overhang with firm ground under it, are both walked out of without stooping, and each of them read as a step
+    of up to 9 while the door was fine; and a paving with a block straight on it, where nobody fits, read as no step at
+    all. Both are decided by the same thing: whether there is room to stand.
+
+    Returns `(step, surface)` of the walkable surface closest to the door (the step as the gate counts it,
+    `floor - (surface + 1)`), or `(None, None)` when the column holds none in the window read. `read` is filled in with
+    what `street_ground` would have taken, plus every surface found, so a door that misses says why."""
+    ys = walkable_surfaces(blocks, x, z, floor + 8, rigid_boxes)
+    street_ground(blocks, x, z, floor + 8, rigid_boxes, read)        # the old reading, kept for the report
+    if read is not None:
+        read.update(surfaces=ys)
+    if not ys:
+        return None, None
+    surface = min(ys, key=lambda y: abs(floor - (y + 1)))
+    return floor - (surface + 1), surface
+
+
+def parent_of(pieces, i):
+    """`(index, (jx, jz))` of the piece that piece `i` hangs from and their joint, or None. The jigsaw places a parent
+    before its children and gives both a junction at the other's jigsaw block, so the parent is the latest earlier piece
+    whose footprint holds one of the child's junctions while the child's footprint holds one of the parent's: the same
+    rule `VillageStructure.parent` decides with in the mod."""
+    for j in range(i - 1, -1, -1):
+        for jx, jy, jz, dy, proj in pieces[i]["junctions"]:
+            if not inside(pieces[j]["bb"], jx, jz) or inside(pieces[i]["bb"], jx, jz):
+                continue
+            if any(inside(pieces[i]["bb"], tx, tz) for tx, ty, tz, tdy, tproj in pieces[j]["junctions"]):
+                return j, (jx, jz)
+    return None
+
+
+def fit_figures(blocks, pieces, bad_doors=None, highest=None, street_top=None):
+    """(graded points ok, total), (doors ok, total), natural trunks on the pieces. A door is read with `street_step`:
+    it fits when the column one step into the piece it hangs from holds some walkable ground within a step of the door's
+    floor row (#96, the owner's rule). With `bad_doors` (a list), each door that misses is appended to it: (piece, its
+    box, the column measured, the step, what was read there). With `highest` (a dict), the same doors
+    read with `ground` (the highest block of the street column, what the test read until #93) go into it as ok,
+    n and bad: an informative figure, which the test prints and never compares. With `street_top` (a dict), the same
+    doors read as `street_ground` alone read them -- the highest ground of the column that is not inside another rigid
+    piece's box, which is what the gate compared from #93 until the owner's rule (#96) -- go into it the same way.
+    Three readings of one world side by side, two of them informative: what each one says apart is what tells a change
+    of instrument from a change of village, on the same saved world and without generating it twice."""
     g_ok = g_n = d_ok = d_n = 0
     boxes = [p["bb"] for p in pieces]
     rigid = [p["bb"] for p in pieces if p["proj"] == "rigid"]
-    if street is not None:
-        street.update(ok=0, n=0, bad=[])
-    for p in pieces:
+    if highest is not None:
+        highest.update(ok=0, n=0, bad=[])
+    if street_top is not None:
+        street_top.update(ok=0, n=0, bad=[])
+    for i, p in enumerate(pieces):
         bb = p["bb"]
         # grading points: junctions of a piece inside its own footprint with no height difference (a joint's junction lies
         # on the other piece, one block outside the footprint)
@@ -473,20 +604,40 @@ def fit_figures(blocks, pieces, bad_doors=None, street=None):
         jx, jz = joint
         dx = -1 if jx < bb[0] else 1 if jx > bb[3] else 0
         dz = -1 if jz < bb[2] else 1 if jz > bb[5] else 0
-        h = ground(blocks, jx + dx, jz + dz, bb[1] + 8)
+        # the column is chosen by geometry -- a step out from the joint, away from the house -- and nothing makes that
+        # land inside the piece the door hangs from: on a narrow street, at a corner or at a crossing it falls on the
+        # piece beyond, and the door gets judged against somebody else's street. Measure inside the parent: the joint's
+        # own column is inside it by construction, so it is the fallback when the step out leaves it.
+        link = parent_of(pieces, i)
+        cx, cz = jx + dx, jz + dz
+        if link is not None and not inside(pieces[link[0]]["bb"], cx, cz):
+            cx, cz = jx, jz
+        read = {}
+        step, _surface = street_step(blocks, cx, cz, bb[1], [b for b in rigid if b is not bb], read)
+        if read is not None and link is not None:
+            read.update(parent=pieces[link[0]]["loc"], parent_bb=pieces[link[0]]["bb"])
         d_n += 1
-        # standing on the street (h + 1) against standing at the door's joint column (the floor row, bb[1])
-        ok = h is not None and abs(h + 1 - bb[1]) <= 1
+        # some walkable ground of the column within a step of the door's floor row (bb[1]): the owner's rule, #96
+        ok = step is not None and abs(step) <= 1
         d_ok += ok
         if not ok and bad_doors is not None:
-            bad_doors.append((p["loc"], bb, (jx + dx, jz + dz), None if h is None else bb[1] - (h + 1)))
-        if street is not None:
-            hs = street_ground(blocks, jx + dx, jz + dz, bb[1] + 8, [b for b in rigid if b is not bb])
-            ok_s = hs is not None and abs(hs + 1 - bb[1]) <= 1
-            street["n"] += 1
-            street["ok"] += ok_s
-            if not ok_s:
-                street["bad"].append((p["loc"], bb, (jx + dx, jz + dz), None if hs is None else bb[1] - (hs + 1)))
+            bad_doors.append((p["loc"], bb, (cx, cz), step, read))
+        if street_top is not None:
+            # the gate of #93: the highest ground of the column outside any other rigid piece's box, with no headroom
+            # asked for. `street_step` already read it into `read`, so this costs nothing but the comparison.
+            ty = read["y"]
+            ok_t = ty is not None and abs(ty + 1 - bb[1]) <= 1
+            street_top["n"] += 1
+            street_top["ok"] += ok_t
+            if not ok_t:
+                street_top["bad"].append((p["loc"], bb, (cx, cz), None if ty is None else bb[1] - (ty + 1)))
+        if highest is not None:
+            hh = ground(blocks, jx + dx, jz + dz, bb[1] + 8)
+            ok_h = hh is not None and abs(hh + 1 - bb[1]) <= 1
+            highest["n"] += 1
+            highest["ok"] += ok_h
+            if not ok_h:
+                highest["bad"].append((p["loc"], bb, (jx + dx, jz + dz), None if hh is None else bb[1] - (hh + 1)))
     trunks = 0
     for (x, y, z), name in blocks.items():
         if not name.endswith("_log") or not blocks.get((x, y - 1, z), "").endswith(SOIL):
@@ -498,7 +649,10 @@ def fit_figures(blocks, pieces, bad_doors=None, street=None):
     return (g_ok, g_n), (d_ok, d_n), trunks
 
 
-def terrain_fit(jar, work, fails, measure):
+def terrain_fit(jar, work, fails, measure, seed=FIT_SEED):
+    """The terrain fit of the village nearest the origin of a world on `seed` (`FIT_SEED` by default: what the battery
+    has always measured). The seed is a parameter because the door figure of one world is one sample of a figure about
+    terrain, and the defects it finds live on hillsides a single seed may not have (#96)."""
     launcher = s.prepare(work, jar, s.gradle_properties())
     with open(os.path.join(work, "config", "heraldia.json")) as f:
         cfg = json.load(f)
@@ -508,7 +662,7 @@ def terrain_fit(jar, work, fails, measure):
         json.dump(cfg, f)
     props = os.path.join(work, "server.properties")
     with open(props) as f:
-        text = re.sub(r"level-seed=.*", f"level-seed={FIT_SEED}", f.read())
+        text = re.sub(r"level-seed=.*", f"level-seed={seed}", f.read())
     with open(props, "w") as f:
         f.write(text)
     proc, ctx = start_server(work, launcher, ["-Dheraldia.depurar.puerto=true", "-Dheraldia.perfil=true"])
@@ -539,20 +693,22 @@ def terrain_fit(jar, work, fails, measure):
     world = os.path.join(work, "world")
     sid, pieces = start_pieces(world, x, z)
     blocks = read_blocks(world, x - FIT_RADIUS - 16, z - FIT_RADIUS - 16, x + FIT_RADIUS + 16, z + FIT_RADIUS + 16)
-    bad, street = [], {}
-    (g_ok, g_n), (d_ok, d_n), trunks = fit_figures(blocks, pieces, bad, street)
-    print(f"fit: {sid} at {x} {z}: {len(pieces)} pieces; ground at {g_ok} of {g_n} grading points; {d_ok} of {d_n} doors "
-          f"within a step of their street; {trunks} natural trunks on the pieces")
+    bad, highest, street_top = [], {}, {}
+    (g_ok, g_n), (d_ok, d_n), trunks = fit_figures(blocks, pieces, bad, highest, street_top)
+    print(f"fit: seed {seed}: {sid} at {x} {z}: {len(pieces)} pieces; ground at {g_ok} of {g_n} grading points; "
+          f"{d_ok} of {d_n} doors within a step of their street; {trunks} natural trunks on the pieces")
     share = lambda a, n: f"{a / n:.3f}" if n else "-"
-    print(f"fit: doors within a step: {d_ok} of {d_n} ({share(d_ok, d_n)}, the gate: highest block of the street column) "
-          f"| {street['ok']} of {street['n']} ({share(street['ok'], street['n'])}, the street under any piece on it, "
-          f"informative: compared with nothing)")
+    print(f"fit: doors within a step: {d_ok} of {d_n} ({share(d_ok, d_n)}, the gate: some walkable ground of the column "
+          f"within a step of the door) | {street_top['ok']} of {street_top['n']} ({share(street_top['ok'], street_top['n'])}, "
+          f"the highest ground outside another piece's box, the gate of #93, informative) "
+          f"| {highest['ok']} of {highest['n']} ({share(highest['ok'], highest['n'])}, the highest block of the street "
+          f"column, the gate before #93, informative: neither is compared with anything)")
     # every door that misses, by name: a count alone cannot tell one mechanism from four accidents
-    for loc, bb, (cx, cz), step in bad:
+    for loc, bb, (cx, cz), step, read in bad:
         print(f"fit:   door off its street: {loc} box {bb} street column ({cx}, {cz}) "
-              f"{'no ground under it' if step is None else f'floor {step:+d} from the street'}")
-    for loc, bb, (cx, cz), step in street["bad"]:
-        print(f"fit:   (informative) door off the street under the pieces: {loc} box {bb} street column ({cx}, {cz}) "
+              f"{'no ground under it' if step is None else f'floor {step:+d} from the street'}; {read_note(read)}")
+    for loc, bb, (cx, cz), step in highest["bad"]:
+        print(f"fit:   (informative) door off the highest block of its street column: {loc} box {bb} street column ({cx}, {cz}) "
               f"{'no ground under it' if step is None else f'floor {step:+d} from the street'}")
     if measure:
         return
@@ -566,7 +722,7 @@ def terrain_fit(jar, work, fails, measure):
         fails.append(f"fit: {trunks} trees of world generation on the village pieces (at most {FIT_MAX_TREES})")
 
 
-def main():
+def parser():
     ap = argparse.ArgumentParser()
     ap.add_argument("--jar", required=True)
     ap.add_argument("--work", default=os.path.join(s.ROOT, "build", "smoke-aldeas"))
@@ -574,11 +730,17 @@ def main():
     ap.add_argument("--only-natural", action="store_true")
     ap.add_argument("--only-fit", action="store_true")
     ap.add_argument("--seeds", nargs="*", default=NATURAL_SEEDS)
-    a = ap.parse_args()
+    # the seed of the terrain fit phase (`--seeds` is the coastal phase's): what the battery runs is the default
+    ap.add_argument("--fit-seed", default=FIT_SEED)
+    return ap
+
+
+def main():
+    a = parser().parse_args()
     os.makedirs(a.work, exist_ok=True)
     fails = []
     # a new world with only the forest and taiga families: the terrain fit in natural generation
-    terrain_fit(os.path.abspath(a.jar), a.work, fails, a.measure)
+    terrain_fit(os.path.abspath(a.jar), a.work, fails, a.measure, a.fit_seed)
     if a.only_fit:
         print("VILLAGES AND TERRAIN:", "OK" if not fails else fails)
         return 1 if fails and not a.measure else 0

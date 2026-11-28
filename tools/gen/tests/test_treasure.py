@@ -167,9 +167,10 @@ def test_keepsake_with_name():
 
 def test_items_exist():
     """Against the real 26.3 registry (mcmeta summary left by the build); without it, it is skipped."""
-    f = os.path.join(ROOT, "build/mcmeta-summary/registries/data.json")
+    summary = os.environ.get("MCMETA_SUMMARY") or os.path.join(ROOT, "build", "mcmeta-summary")
+    f = os.path.join(summary, "registries", "data.json")
     if not os.path.isfile(f):
-        pytest.skip("without build/mcmeta-summary")
+        pytest.skip(f"without the 26.3 registry summary ({summary}): run ./gradlew fetchRegistries or set MCMETA_SUMMARY")
     with open(f, encoding="utf-8") as fh:
         items = set(json.load(fh)["item"])
     names = re.findall(r'"name": "minecraft:([a-z0-9_]+)"', json.dumps([treasure.fragment(), treasure.place_chest()]))

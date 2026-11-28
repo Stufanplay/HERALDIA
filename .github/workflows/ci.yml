@@ -1,11 +1,14 @@
 name: CI
 
-# Comprobaciones de cada PR contra develop o main, de cada push a develop y a mano (workflow_dispatch).
+# Comprobaciones de cada PR contra pre-production o main, de cada push a pre-production y a mano
+# (workflow_dispatch). **No corre en develop** (decisión del dueño, 28-nov-2026: develop es la rama de trabajo y
+# no gasta CI; lo probado se promociona a pre-production y es ahí donde esta batería tiene que pasar; de
+# pre-production a main sólo con la aprobación del dueño).
 # No publica nada (la publicación es .github/workflows/publish.yml, en main).
 #
 # Política de pruebas (docs/DEVELOPMENT.md): en un PR van la compilación, todos los tests unitarios, la prueba de humo
 # y solo las pruebas de servidor afectadas por los ficheros cambiados (tools/test.py, el mismo mapa de rutas que en
-# local). La batería completa va en cada push a develop, a mano (la sesión auditora) y en un PR con la etiqueta
+# local). La batería completa va en cada push a pre-production, a mano (la sesión auditora) y en un PR con la etiqueta
 # «bateria-completa» o con «[bateria completa]» en el título. Las de compatibilidad con otros mods
 # (tools/smoke/compat_mods.py) van en la batería completa y en un PR solo si tocan compatibilidad o colocación.
 # El coste de generación (tools/smoke/generation_cost.py, job «coste») va en la batería completa y en un PR solo si
@@ -13,10 +16,10 @@ name: CI
 # jugar (tools/smoke/runtime_cost.py, job «juego») igual, si toca lo que corre al jugar o lo que llevan las aldeas (RUNTIME_PATHS).
 on:
   pull_request:
-    branches: [develop, main]
+    branches: [pre-production, main]
     types: [opened, synchronize, reopened, labeled, edited]
   push:
-    branches: [develop]
+    branches: [pre-production]
   workflow_dispatch:
 
 permissions:

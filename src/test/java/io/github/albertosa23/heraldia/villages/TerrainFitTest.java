@@ -41,10 +41,20 @@ class TerrainFitTest {
 	private static final BoundingBox VILLAGER = new BoundingBox(16, 66, -3, 16, 67, -3);
 
 	private static List<Part> village() {
+		return village(STREET, HOUSE);
+	}
+
+	/**
+	 * The same village with the street's and the house's boxes given: what a door's step is made of. The jigsaw stands a
+	 * rigid piece on the generation height of its joint column and a {@code terrain_matching} street on the height of
+	 * its own anchor column, so the two boxes are what say whether a villager can walk in, and the terrain by the door
+	 * says nothing about it.
+	 */
+	private static List<Part> village(BoundingBox street, BoundingBox house) {
 		List<Part> parts = new ArrayList<>();
 		parts.add(Part.of(PLAZA, Kind.ROOT, -1, 0, 0));
-		parts.add(Part.of(STREET, Kind.STREET, 0, 9, 5));
-		parts.add(Part.of(HOUSE, Kind.BUILDING, 1, 17, 2));
+		parts.add(Part.of(street, Kind.STREET, 0, 9, 5));
+		parts.add(Part.of(house, Kind.BUILDING, 1, 17, 2));
 		parts.add(Part.of(VILLAGER, Kind.CONTENT, 2, 16, -2));
 		return parts;
 	}
@@ -149,8 +159,34 @@ class TerrainFitTest {
 
 	@Test
 	void aDoorTooFarAboveTheStreetDropsTheHouseAndItsVillager() {
-		TerrainFit.Ground cliff = land((x, z) -> z <= 2 && x >= 14 && x <= 20 ? 65 + TerrainFit.MAX_DOOR + 1 : 65);
-		assertArrayEquals(new Reason[] {Reason.KEPT, Reason.KEPT, Reason.DOOR_STEP, Reason.PARENT}, reasons(cliff));
+		// the border itself, both sides of it: MAX_DOOR + 1 off goes, MAX_DOOR off stays with its ramp
+		TerrainFit.Ground gone = land((x, z) -> z <= 2 && x >= 14 && x <= 20 ? 65 + TerrainFit.MAX_DOOR + 1 : 65);
+		assertArrayEquals(new Reason[] {Reason.KEPT, Reason.KEPT, Reason.DOOR_STEP, Reason.PARENT}, reasons(gone));
+		TerrainFit.Result r = TerrainFit.fit(village(), land((x, z) -> z <= 2 && x >= 14 && x <= 20
+				? 65 + TerrainFit.MAX_DOOR : 65));
+		assertArrayEquals(new Reason[] {Reason.KEPT, Reason.KEPT, Reason.KEPT, Reason.KEPT}, r.reasons());
+		assertEquals(TerrainFit.MAX_DOOR, r.grades().get(2).size());
+	}
+
+	@Test
+	void aStreetWhosePavingIsNotWhereItsBoxSaysIsNotSeen() {
+		// The blind spot, asserted on purpose so that it stays written down instead of being found again (#96). A
+		// terrain_matching street's blocks drop to the heightmap of each of their OWN columns -- that projection carries
+		// a GravityProcessor(WORLD_SURFACE_WG, -1) and RIGID carries none -- so its paving can lie blocks away from
+		// both its box and the terrain the pass samples next to the door. In the seed-s4 village `avenues/c` has its
+		// box at y 79..84 with not one block on row 79 and its paving at 75.
+		// The pass reads two generation heights, the joint column and one column out, and next to a door those are the
+		// SAME terrain: here the land is flat, so it reads no step and keeps the house. On the test seeds that is why
+		// seed s6 keeps a door five blocks over its street and another six over it.
+		// Reading the parent's box instead was tried and reverted: it answered +1 where the world had +6 and dropped 17
+		// buildings in one s4 village on a number nothing supports. What would see it is the generation height of the
+		// measured column EXACTLY instead of off Ground's 4-block grid -- a noise column per building, whose cost has
+		// to be measured first. When that lands, this test asserts DOOR_STEP.
+		BoundingBox street = new BoundingBox(10, 62, 2, 25, 67, 8);
+		BoundingBox house = new BoundingBox(14, 68, -6, 20, 78, 1);
+		TerrainFit.Result r = TerrainFit.fit(village(street, house), land((x, z) -> 68));
+		assertArrayEquals(new Reason[] {Reason.KEPT, Reason.KEPT, Reason.KEPT, Reason.KEPT}, r.reasons());
+		assertTrue(r.grades().get(2).isEmpty(), "no ramp either: the pass sees no step at all");
 	}
 
 	@Test

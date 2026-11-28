@@ -16,12 +16,28 @@ Since T47b/T47c the names of the Java packages, classes and tests and the names 
 ## Environment (new container)
 - Java 25: `curl -sSL -o /tmp/jdk.tgz "https://api.adoptium.net/v3/binary/latest/25/ga/linux/x64/jdk/hotspot/normal/eclipse" && mkdir -p ~/jdk25 && tar xzf /tmp/jdk.tgz -C ~/jdk25 --strip-components=1 && export JAVA_HOME=~/jdk25 PATH=~/jdk25/bin:$PATH`
 - Python: `pip install -r tools/gen/requirements.txt`
+- Java 25 has to be on `PATH`, not only in `JAVA_HOME`: Gradle reads `JAVA_HOME`, but the server tests spawn the
+  dedicated server with the `java` of the `PATH` (`server_smoke.py`: `subprocess.Popen(["java", ...])`). With an
+  older one there, the jar builds and the server dies at once with `UnsupportedClassVersionError: net/minecraft/bundler/Main ... class file version 69.0` (69 is Java 25; 65 is Java 21).
+- Just the jar, without the heavy tests: **`./gradlew assemble`**. `remapJar` **does not exist** in Fabric Loom
+  1.19.6 and fails in a second with `Task 'remapJar' not found in root project`, which reads like something else.
+  `./gradlew build` builds it too but runs `check`, and that pulls in `testPesado` (see "Testing policy").
+- `--work` of any server test has to be an **absolute path**: the server is started with that directory as its
+  working directory, so a relative one makes the launcher unreachable from inside it (`Unable to access jarfile`,
+  one second in, before the server says anything). The script's own default is absolute; a path given by hand is
+  not unless it is written that way.
+- Running the generator's pytest **by hand** needs `MCMETA_SUMMARY` pointing at the registry summary (or
+  `build/mcmeta-summary` present): without it 6 of its tests **skip silently** and the battery still reads green
+  (1463 and six skips against 1477 and none). `testGen` gets it on its own since #92; `python3 -m pytest
+  tools/gen/tests` does not.
 - Build (generates, validates and audits; fails on any warning): `./gradlew build`
 - Smoke test on a real 26.3 dedicated server: `python3 tools/smoke/server_smoke.py --jar build/libs/heraldia-<version>.jar`
 - Changelog: `python3 tools/changelog.py check`
 - CI (`.github/workflows/ci.yml`): on every PR against `develop` or `main`, on every push to `develop` and by hand (`workflow_dispatch`). Jobs: `seleccion` (generator pytest and choice of server tests with `tools/test.py`), `compilar` (Java 25 and Python 3.12 with the shared action `.github/actions/preparar`; `tools/changelog.py check` and `./gradlew build -x testGen -x testPesado --build-cache`), `junit-pesado` (`./gradlew testPesado`, alongside the build), `humo` (`server_smoke.py` with the `.jar`; the generated data are taken from the `.jar`, and the mcmeta clone is needed because `atlantis/smoke.py` rebuilds its plan), `servidor` (groups of server tests in parallel, each group in series on its machine, with `--work build/smoke`), `coste` (generation cost with and without Heraldia, alongside the groups; see "Generation cost") and `juego` (play cost: tick time with players in villages, the arena and a caravan, with and without Heraldia, alongside the groups; see "Play cost"). Caches: Gradle (and its build cache), pip, the test Fabric server, the Modrinth mods of the tests (`build/smoke/modrinth`, one per group; the pinned list with its sha512 is in `tools/smoke/modrinth.py`) and the mcmeta clone (`build/mcmeta-summary`). If a test fails, the `logs/latest.log` of every test in the group is uploaded as an artifact. A new server test (`tools/smoke/*.py` or `tools/gen/uniques/<id>/smoke_*.py`, accepting `--jar` and `--work`) joins the battery on its own; see "Testing policy". `publish.yml` (on `main`) does not change. CI does not replace the owner's screenshots.
 
 ## Testing policy (the owner's decision)
+> **Update (28-Nov-2026, the owner's decision, to stop spending hours and usage on every change): three branches, and CI no longer runs on `develop`.** `develop` is where all development happens and work stays there until the owner says to promote it; `.github/workflows/ci.yml` has no `develop` trigger any more, so **a merge into `develop` never waits for CI**. What the owner promotes goes to **`pre-production`** (permanent, never deleted), and that is where CI runs and **the full battery has to be green**; it is the only place the heavy tests run. From `pre-production` to `main` only with the owner's explicit approval. Per session, only **quick checks of its own work: minutes, not hours** — the unit tests it touched or added, `tools/changelog.py check` and the static guards of what it changed. A session does not run the full battery, the server tests, `testPesado`, the generation cost or the play cost. See `CLAUDE.md` at the root. Where anything below says otherwise, this update wins.
+
 > **Update (17-Nov-2026, the owner's decision, to speed things up and save usage):** each session runs **only the new tests it created for its task**; if the task brings no new tests, it tests nothing. It does **not** run `tools/test.py --affected` or the full battery and does **not** wait for CI: the PR is merged into `develop` as soon as the session reports. CI still runs on every PR, but does not block. **The final auditing session** runs the full battery (`--all` or CI with `workflow_dispatch`), reviews everything in detail and fixes what is needed. Where the text below says otherwise, this update wins.
 
 1. **Each session tests and verifies only the work it has done**, without running the full battery or worrying about what the others do: the unit tests of its code (mandatory: as many as reasonable) and new server tests for the parts it touches. That way every piece of new code arrives with its minimum tests.
