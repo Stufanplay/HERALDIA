@@ -27,9 +27,10 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SMOKE = "tools/smoke/server_smoke.py"
 FULL = "*"            # in the map: the change affects everything (common code) -> full suite
 NOT_TESTS = {"server_smoke.py", "modrinth.py", "generation_cost.py", "runtime_cost.py", "wayfarers.py",
-             "saved_world.py"}  # common modules, the cost
+             "saved_world.py", "terrain_traps.py"}  # common modules, the cost
 # ones (their own jobs) and the wayfarers' scenario, which runs inside caravans.py (same server and corridor);
-# saved_world.py reads a saved world's region files for village_routes.py (a helper: no --jar, no server of its own)
+# saved_world.py reads a saved world's region files for village_routes.py and terrain_traps.py the one-way drops of
+# the terrain round a structure (helpers: no --jar, no server of their own)
 # Compatibility with other mods (one test per group, with Modrinth mods): long and with downloads, so in a PR
 # it only runs if the test itself, the mod list or the common placement code changes (what decides where each
 # structure appears and whether it clashes with those of other mods). In the full suite (push to develop, workflow_dispatch, label) always.
