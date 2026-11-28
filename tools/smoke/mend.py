@@ -249,7 +249,8 @@ def phase_old(a, p):
         ctx.run(f"fill {wx - 6} {top - hs.POND_DEPTH + 1} {z + 12} {wx + 6} {top} {z + 24} minecraft:water", r"filled|Successfully|No blocks")
         ctx.ticks(10)
         ctx.run(f"forceload remove {wx - 24} {z + 2} {wx + 24} {z + 30}", r"[Cc]hunk|unmarked|No")
-        ctx.run(f"player {hs.P} spawn at {x} {y} {z}", r"joined the game|Unknown|Incorrect")
+        s.require_carpet(ctx)
+        ctx.run(f"player {hs.P} spawn at {x} {y} {z}", r"joined the game")
         if not p.check(ctx.until(f"execute if entity @a[name={hs.P}]"), "Carpet's player does not appear"):
             return None
         ctx.run(f"tp {hs.P} {x} {y} {z}", r"Teleported|Unknown")
@@ -262,7 +263,7 @@ def phase_old(a, p):
         ground_y = int(m.group(2))
         if not p.check(p.wait_log(hs.BUILT, 900), "the grounds' build does not finish"):
             return None
-        ctx.run(f"player {hs.P} kill", r"left the game|Unknown|Incorrect")
+        ctx.run(f"player {hs.P} kill", r"left the game")
         # a player's fountain by the town: a source on a pillar, its water running off it (fed: never to be touched)
         fx, fz = box[0] - 20, box[2] + 10
         ctx.run(f"forceload add {fx - 8} {fz - 8} {fx + 8} {fz + 8}", r"[Cc]hunk|marked|already")

@@ -50,12 +50,13 @@ class Server:
                 self.proc.kill()
 
     def spawn(self, name):
-        self.ctx.run(f"player {name} spawn at {X} {Y} {Z}", r"joined the game|Player .* spawn|Unknown|Incorrect")
+        s.require_carpet(self.ctx)
+        self.ctx.run(f"player {name} spawn at {X} {Y} {Z}", r"joined the game|Player .* spawn")
         if not self.ctx.until(f"execute if entity @a[name={name}]"):
             raise SystemExit(f"simulated player {name} (Carpet) does not appear")
 
     def leave(self, name):
-        self.ctx.run(f"player {name} kill", r"left the game|Unknown|Incorrect")
+        self.ctx.run(f"player {name} kill", r"left the game")
         self.ctx.until(f"execute if entity @a[name={name}]", want=False)
 
     def books(self, name, version=None):

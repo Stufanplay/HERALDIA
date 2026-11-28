@@ -230,7 +230,8 @@ def run(p, ctx, hp, chests):
     L = Look(p, b)
     spawn = L.w(hp["aparicion"])
     for who in (P, Q):
-        ctx.run(f"player {who} spawn at {spawn[0] + 0.5} {spawn[1]} {spawn[2] + 0.5}", r"joined the game|Player .* spawn|Unknown|Incorrect")
+        s.require_carpet(ctx)
+        ctx.run(f"player {who} spawn at {spawn[0] + 0.5} {spawn[1]} {spawn[2] + 0.5}", r"joined the game|Player .* spawn")
         if not ctx.until(f"execute if entity @a[name={who}]"):
             raise SystemExit(f"simulated player {who} (Carpet) does not appear")
     ctx.ticks(20)                                       # Carpet loads a fake player's data after its JOIN

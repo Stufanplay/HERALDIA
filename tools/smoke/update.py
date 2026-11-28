@@ -226,7 +226,8 @@ def main():
         m = wait_since(ctx, n0, r"update repair dry-run: (\d+) mobs de plantilla revisados, (\d+) cambios", 30)
         check(m.group(2) == "0", f"tras repair aún quedan {m.group(2)} cambios (no es idempotente)")
         # configuration panel and preferences
-        ctx.run(f"player {PLAYER} spawn at 0 100 0", r"joined the game|Player .* spawn|Unknown|Incorrect")
+        s.require_carpet(ctx)
+        ctx.run(f"player {PLAYER} spawn at 0 100 0", r"joined the game|Player .* spawn")
         check(ctx.until(f"execute if entity @a[name={PLAYER}]"), "no aparece el jugador simulado (Carpet)")
         ctx.run(f"op {PLAYER}", r"Made .* operator|Nothing changed")
         ctx.run(f"execute as {PLAYER} run heraldia config", rf"panel de configuración abierto \({PLAYER}, principal\)|Unknown|Incorrect")
