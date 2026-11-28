@@ -342,7 +342,7 @@ def natural_piers(ctx, fails, villages):
 
 def natural(jar, work, fails, measure, seeds):
     """Several worlds (fixed seeds) with only the coastal family, until NATURAL_N villages are gathered."""
-    total, with_pier, times = 0, 0, []
+    total, with_pier, times, queries = 0, 0, [], []
     for seed in seeds:
         if total >= NATURAL_N:
             break
@@ -360,13 +360,23 @@ def natural(jar, work, fails, measure, seeds):
             print(f"natural: seed {seed}: {len(villages)} coastal villages")
             with_pier += natural_piers(ctx, fails, villages)
             total += len(villages)
-            times += [int(m.group(1)) for m in re.finditer(r"aldea de costa en .*? en (\d+) µs", ctx.log())]
+            for m in re.finditer(r"aldea de costa en .*? (\d+) consultas del fondo.*? en (\d+) µs", ctx.log()):
+                queries.append(int(m.group(1)))
+                times.append(int(m.group(2)))
         finally:
             stop(proc)
     if times:
+        # Informational, not a limit: the search runs when a coastal village's start is created, on a world-generation
+        # thread; the server thread does not run it, but a /locate that creates the start waits for it (here: "Locating
+        # element ... took 700 ms", 126 ms of it this search). Its wall time moved 0.76x-1.35x for the same village between
+        # two identical runs (#90, 12 villages). Its seabed queries are what is deterministic (12 of 12
+        # identical), and they bound the work: about 0.56 ms each. Measured over 30 seeds (71 villages): queries median 78,
+        # max 252; time median 64 ms, max 194 ms, against ~470 ms median to assemble the village itself.
         times.sort()
-        print(f"natural: port search in {len(times)} villages: median {times[len(times) // 2] / 1000:.1f} ms, "
-              f"máximo {times[-1] / 1000:.1f} ms")
+        queries.sort()
+        print(f"natural: port search (informational: wall time on a world-generation thread; /locate waits for it) in "
+              f"{len(times)} villages: median {times[len(times) // 2] / 1000:.1f} ms, max {times[-1] / 1000:.1f} ms; "
+              f"seabed queries (deterministic): median {queries[len(queries) // 2]}, max {queries[-1]}")
     rate = with_pier / total if total else 0
     print(f"natural: {with_pier} of {total} coastal villages with a pier ({rate:.0%})")
     if total < NATURAL_N:
