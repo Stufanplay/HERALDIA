@@ -16,6 +16,20 @@ Since T47b/T47c the names of the Java packages, classes and tests and the names 
 ## Environment (new container)
 - Java 25: `curl -sSL -o /tmp/jdk.tgz "https://api.adoptium.net/v3/binary/latest/25/ga/linux/x64/jdk/hotspot/normal/eclipse" && mkdir -p ~/jdk25 && tar xzf /tmp/jdk.tgz -C ~/jdk25 --strip-components=1 && export JAVA_HOME=~/jdk25 PATH=~/jdk25/bin:$PATH`
 - Python: `pip install -r tools/gen/requirements.txt`
+- Java 25 has to be on `PATH`, not only in `JAVA_HOME`: Gradle reads `JAVA_HOME`, but the server tests spawn the
+  dedicated server with the `java` of the `PATH` (`server_smoke.py`: `subprocess.Popen(["java", ...])`). With an
+  older one there, the jar builds and the server dies at once with `UnsupportedClassVersionError: net/minecraft/bundler/Main ... class file version 69.0` (69 is Java 25; 65 is Java 21).
+- Just the jar, without the heavy tests: **`./gradlew assemble`**. `remapJar` **does not exist** in Fabric Loom
+  1.19.6 and fails in a second with `Task 'remapJar' not found in root project`, which reads like something else.
+  `./gradlew build` builds it too but runs `check`, and that pulls in `testPesado` (see "Testing policy").
+- `--work` of any server test has to be an **absolute path**: the server is started with that directory as its
+  working directory, so a relative one makes the launcher unreachable from inside it (`Unable to access jarfile`,
+  one second in, before the server says anything). The script's own default is absolute; a path given by hand is
+  not unless it is written that way.
+- Running the generator's pytest **by hand** needs `MCMETA_SUMMARY` pointing at the registry summary (or
+  `build/mcmeta-summary` present): without it 6 of its tests **skip silently** and the battery still reads green
+  (1463 and six skips against 1477 and none). `testGen` gets it on its own since #92; `python3 -m pytest
+  tools/gen/tests` does not.
 - Build (generates, validates and audits; fails on any warning): `./gradlew build`
 - Smoke test on a real 26.3 dedicated server: `python3 tools/smoke/server_smoke.py --jar build/libs/heraldia-<version>.jar`
 - Changelog: `python3 tools/changelog.py check`
