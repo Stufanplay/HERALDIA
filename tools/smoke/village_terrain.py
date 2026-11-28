@@ -440,11 +440,18 @@ def street_ground(blocks, x, z, top, rigid_boxes, read=None):
 
     The skip is by BOX, not by block, and that is worth saying out loud: a village piece's box spans its whole height
     while most of its columns are air (eaves, overhangs, the 15-row tower with hollow corners), so a street that is
-    perfectly walkable can be skipped just the same and what lies under it read instead. A piece that really stands ON
-    the street has its box floor over the paving (the floor row of a rigid piece is the street's paving + 1), so its box
-    does not hold the paving row and the skip should never reach it; a box that does start at or below street level is
-    not a piece over the street. Nor is any headroom asked for: the highest ground of the window wins, so a rock ceiling
-    over a walkable street outranks the paving one row under the door.
+    perfectly walkable can be skipped just the same and what lies under it read instead. Nor is any headroom asked for:
+    the highest ground of the window wins, so a rock ceiling over a walkable street outranks the paving one row under
+    the door. (The gate does not read it that way any more: `street_step` asks whether a villager can stand somewhere
+    in the column. This one is kept for the report.)
+
+    No bound can be put on when the skip reaches the paving, and the attempt that was here is removed (#96): it said
+    that a piece standing on the street has its box floor over the paving, so the skip could never reach the paving row.
+    That rests on the paving being at the floor of the street's own box, and it is not. A `terrain_matching` piece's
+    projection carries a `GravityProcessor(WORLD_SURFACE_WG, -1)` of its own, which drops every block of the piece to
+    the heightmap of its own column, so its box is nominal: in the seed-s4 village `avenues/c` has its box at y 79..84
+    with not one block on row 79 and its paving at 75. Nothing follows from comparing a rigid box's floor with "street
+    level", because street level is not where the box says.
 
     One number cannot tell those columns apart, and this function does not try to: what it returns and what the gate
     compares are unchanged. `read` (a dict) is filled in with what was read instead, so the report can tell them apart:

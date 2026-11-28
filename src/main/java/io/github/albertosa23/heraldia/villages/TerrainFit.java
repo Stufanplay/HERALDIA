@@ -7,12 +7,13 @@ import net.minecraft.world.level.levelgen.structure.BoundingBox;
 /**
  * How a village fits the terrain it falls on, decided once when the village is created, from the generation heights
  * only (the same noise for a seed: deterministic, the same with /place and in natural generation).
- * <p>The jigsaw lays each street ({@code terrain_matching}) flat on the generation height of its own anchor column and
- * stands each rigid piece on the generation height of the column of its joint with that street (and only aligns a
- * child to its parent's jigsaw block when both are {@code rigid}: {@code JigsawPlacement}, 26.3). On flat land that is
- * all it takes; on a hillside a street can climb two or more blocks from one column to the next (villagers only step up
- * one), a building can face a street a step or more above or below its door, and a low fenced piece (garden, well) can
- * end up in a pit. Villagers
+ * <p>The jigsaw lays the streets ({@code terrain_matching}) over the terrain column by column -- that projection
+ * carries a {@code GravityProcessor(WORLD_SURFACE_WG)}, so each of their blocks drops to the heightmap of its own
+ * column and their boxes are nominal -- and stands each rigid piece on the generation height of the column of its
+ * joint with the street (it aligns a child to its parent's jigsaw block only when both are {@code rigid}:
+ * {@code JigsawPlacement}, 26.3). On flat land that is all it takes; on a hillside a street can climb two or more
+ * blocks from one column to the next (villagers only step up one), a building can face a street a step or more above
+ * or below its door, and a low fenced piece (garden, well) can end up in a pit. Villagers
  * only claim a bed or a workstation they can walk to, and in 26.3 they only look for a path a short way (16 blocks), so
  * every step that cuts a street or a door costs beds and workstations.
  * <p>This pass does the least that fixes it: a street with a step is <b>graded</b> (its centre line gets a profile that
@@ -141,7 +142,7 @@ public final class TerrainFit {
 	private static Reason judge(Part p, Part parent, Ground g, List<int[]> grade) {
 		return switch (p.kind()) {
 			case STREET -> street(p, parent, g, grade);
-			case BUILDING -> building(p, parent, g, grade);
+			case BUILDING -> building(p, g, grade);
 			default -> Reason.KEPT;
 		};
 	}
@@ -284,32 +285,45 @@ public final class TerrainFit {
 	}
 
 	/**
-	 * A building whose door is more than a step off its street gets a ramp: grading points from the door into the
-	 * street, a block a column; more than {@link #MAX_DOOR} off, it is dropped. A low building (a garden, a well) sunk
-	 * in a pit it could not be left from is dropped too.
-	 * <p>The step is between the two <b>placed boxes</b>, not between two generation heights. {@code JigsawPlacement}
-	 * (26.3, read in the bytecode) aligns a child with its parent's jigsaw block only when <b>both</b> are
-	 * {@code rigid}; a rigid child of a {@code terrain_matching} parent is placed on
-	 * {@code getFirstFreeHeight(joint column, WORLD_SURFACE_WG)} instead. So a building's floor row is the generation
-	 * height of <b>its own</b> joint column -- which its box already says, exactly -- while the street it hangs from
-	 * was laid flat on the height of <b>the street's own anchor</b> column, up to a piece's length away. On a hillside
-	 * those two are blocks apart, and that difference is the step a villager meets at the door.
-	 * <p>Reading two neighbouring generation heights instead ({@code g.surface} at the joint and one column out) could
-	 * not see it: next to the door the terrain is the same on both columns, so it answered "no step" for a door five
-	 * blocks over its street (measured on the test seeds, Nov 2026, #96). What a villager steps on when it walks out is
-	 * the row over the parent's paving, {@code parent.box().minY() + 1} -- the same expression {@link #street} already
-	 * uses for a rigid parent. No height has to be asked of the generator for this, so the grid of
-	 * {@code VillageStructure.Ground} no longer blurs it either: the only reader left here is the pit check.
+	 * A building whose door is more than a step off its street (the street column next to the joint, against the joint
+	 * column the jigsaw stood it on) gets a ramp: grading points from the door into the street, a block a column; more
+	 * than {@link #MAX_DOOR} off, it is dropped. A low building (a garden, a well) sunk in a pit it could not be left
+	 * from is dropped too.
+	 * <p><b>What is known about the two heights, and why this still reads the noise twice</b> (#96, Nov 2026). Two
+	 * facts, each read in 26.3's bytecode and each confirmed in a saved world:
+	 * <ul>
+	 * <li>A {@code rigid} child of a {@code terrain_matching} parent is <b>not</b> aligned to its parent's jigsaw
+	 * block: {@code JigsawPlacement} aligns only when <b>both</b> are {@code rigid}, and otherwise places the child on
+	 * {@code getFirstFreeHeight(the joint column, WORLD_SURFACE_WG)}. So a building's floor row is the generation
+	 * height of its own joint column, <b>exactly</b>, and its box says it: in the seed-s4 village the entrance jigsaw
+	 * of {@code houses/medium_3} sits on row 79, which is its box's {@code minY}.
+	 * <li>A {@code terrain_matching} parent's box, on the other hand, says <b>nothing</b> about where its paving is.
+	 * That projection carries a {@code GravityProcessor(WORLD_SURFACE_WG, -1)} of its own
+	 * ({@code StructureTemplatePool.Projection}'s static initializer; {@code RIGID} carries an empty list), which drops
+	 * every block of the piece to the heightmap of <b>its own column</b>. The box is nominal: in that same village
+	 * {@code avenues/c} has its box at y 79..84 and <b>not one block on row 79</b> anywhere in its footprint, its
+	 * paving lying at 75, 75, 75, 76 across neighbouring columns; of its 259 footprint columns only 3 have their top
+	 * inside its own box, and one street piece had 0 of 70.
+	 * </ul>
+	 * <p>So {@code parent.box().minY() + 1} is not the row a villager steps on, and a pass that used it read +1 where
+	 * the world had +6 and dropped 17 buildings in one village of seed s4 on a number nothing supports. Mixing the two
+	 * instead -- the exact {@code b.minY()} against an interpolated {@code g.surface} -- would be worse: the grid of
+	 * {@code VillageStructure.Ground} (4 blocks) makes differences of several blocks appear on broken terrain, so it
+	 * would drop buildings for no reason too, in the other direction. Noise against noise is consistent with itself:
+	 * it <b>under</b>-detects, and under-detecting costs no building.
+	 * <p>What it under-detects is known and measured: on the test seeds a door five and a door six blocks over their
+	 * street are kept (s6, Nov 2026), because next to a door the two neighbouring generation heights are the same
+	 * terrain. Seeing them needs the generation height of the measured column <b>exactly</b> rather than off the grid,
+	 * which is a noise column per building and a cost to measure first. Until that exists, this is deliberately blind
+	 * there, and {@code TerrainFitTest} says so in a test of its own.
 	 */
-	static Reason building(Part p, Part parent, Ground g, List<int[]> grade) {
+	static Reason building(Part p, Ground g, List<int[]> grade) {
 		BoundingBox b = p.box();
 		int jx = p.jointX(), jz = p.jointZ();
-		// the row the building's own floor is on: the jigsaw stood the box there, so this is exact
-		int floor = b.minY();
+		int floor = g.surface(jx, jz);
 		int[] d = side(jx, jz, b);
 		if (d != null) {
-			// what a villager steps on when it leaves: the row over the parent's paving
-			int step = parent.box().minY() + 1 - floor;
+			int step = g.surface(jx + d[0], jz + d[1]) - floor;
 			if (Math.abs(step) > MAX_DOOR) {
 				return Reason.DOOR_STEP;
 			}
