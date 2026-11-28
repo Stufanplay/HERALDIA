@@ -126,10 +126,45 @@ def latest_installer():
         return next(v["version"] for v in json.load(r) if v["stable"])
 
 
-def free_port():
-    with socket.socket() as so:
+_given_ports = set()
+
+
+def ephemeral_range():
+    """The kernel's ephemeral port range (Linux: /proc/sys/net/ipv4/ip_local_port_range; 32768-60999 by default)."""
+    try:
+        with open("/proc/sys/net/ipv4/ip_local_port_range") as f:
+            lo, hi = (int(x) for x in f.read().split())
+        return lo, hi
+    except (OSError, ValueError):
+        return 32768, 60999
+
+
+def free_port(low=20000):
+    """A TCP port that is free now, BELOW the kernel's ephemeral range, and not one this process has handed out before.
+    The test binds it later (the server, after starting; runtime_cost.py up to four times over ~47 min), so there is
+    always a gap; a port from bind(("", 0)) is ephemeral, the range every outgoing connection of the machine draws its
+    local port from (downloads, the server's own HTTPS at start, JMX clients, the runner's agent), and one of them can be
+    holding it when the server binds: "FAILED TO BIND TO PORT ... Address already in use", juego dead in 18 s in CI run
+    44965032309. Below the range the kernel never assigns a port on its own, so only another explicit bind can take it."""
+    import random
+    lo, _ = ephemeral_range()
+    if lo - 1 > low:
+        for _ in range(500):
+            p = random.randrange(low, lo)
+            if p in _given_ports:
+                continue
+            with socket.socket() as so:
+                try:
+                    so.bind(("", p))
+                except OSError:
+                    continue
+            _given_ports.add(p)
+            return p
+    with socket.socket() as so:          # no room below the ephemeral range: the old way
         so.bind(("", 0))
-        return so.getsockname()[1]
+        p = so.getsockname()[1]
+    _given_ports.add(p)
+    return p
 
 
 def prepare(work, jar, p):
