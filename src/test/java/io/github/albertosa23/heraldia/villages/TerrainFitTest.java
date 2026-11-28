@@ -41,10 +41,20 @@ class TerrainFitTest {
 	private static final BoundingBox VILLAGER = new BoundingBox(16, 66, -3, 16, 67, -3);
 
 	private static List<Part> village() {
+		return village(STREET, HOUSE);
+	}
+
+	/**
+	 * The same village with the street's and the house's boxes given: what a door's step is made of. The jigsaw stands a
+	 * rigid piece on the generation height of its joint column and a {@code terrain_matching} street on the height of
+	 * its own anchor column, so the two boxes are what say whether a villager can walk in, and the terrain by the door
+	 * says nothing about it.
+	 */
+	private static List<Part> village(BoundingBox street, BoundingBox house) {
 		List<Part> parts = new ArrayList<>();
 		parts.add(Part.of(PLAZA, Kind.ROOT, -1, 0, 0));
-		parts.add(Part.of(STREET, Kind.STREET, 0, 9, 5));
-		parts.add(Part.of(HOUSE, Kind.BUILDING, 1, 17, 2));
+		parts.add(Part.of(street, Kind.STREET, 0, 9, 5));
+		parts.add(Part.of(house, Kind.BUILDING, 1, 17, 2));
 		parts.add(Part.of(VILLAGER, Kind.CONTENT, 2, 16, -2));
 		return parts;
 	}
@@ -137,20 +147,39 @@ class TerrainFitTest {
 
 	@Test
 	void aDoorTwoStepsAboveTheStreetGetsARamp() {
-		// the house stands on its joint column (z 2); the street column next to it (z 3) is two blocks lower
-		TerrainFit.Result r = TerrainFit.fit(village(), land((x, z) -> z <= 2 && x >= 14 && x <= 20 ? 67 : 65));
+		// the house's floor row two over the row a villager stands on along the street (63): the land is flat, so only
+		// the boxes say it
+		List<Part> parts = village(STREET.moved(0, -1, 0), HOUSE);
+		TerrainFit.Result r = TerrainFit.fit(parts, land((x, z) -> 65));
 		assertArrayEquals(new Reason[] {Reason.KEPT, Reason.KEPT, Reason.KEPT, Reason.KEPT}, r.reasons());
-		// the joint column at the door's height (67), then one block lower into the street; z 4 is already at 65
+		// the joint column at the door's height (65), then one block lower into the street
 		List<int[]> ramp = r.grades().get(2);
 		assertEquals(2, ramp.size());
-		assertArrayEquals(new int[] {17, 67, 2}, ramp.get(0));
-		assertArrayEquals(new int[] {17, 66, 3}, ramp.get(1));
+		assertArrayEquals(new int[] {17, 65, 2}, ramp.get(0));
+		assertArrayEquals(new int[] {17, 64, 3}, ramp.get(1));
 	}
 
 	@Test
 	void aDoorTooFarAboveTheStreetDropsTheHouseAndItsVillager() {
-		TerrainFit.Ground cliff = land((x, z) -> z <= 2 && x >= 14 && x <= 20 ? 65 + TerrainFit.MAX_DOOR + 1 : 65);
-		assertArrayEquals(new Reason[] {Reason.KEPT, Reason.KEPT, Reason.DOOR_STEP, Reason.PARENT}, reasons(cliff));
+		// the street's slab MAX_DOOR + 1 under the row the house's floor is on, with the land flat by the door
+		List<Part> parts = village(STREET.moved(0, -TerrainFit.MAX_DOOR - 1, 0), HOUSE);
+		assertArrayEquals(new Reason[] {Reason.KEPT, Reason.KEPT, Reason.DOOR_STEP, Reason.PARENT},
+				TerrainFit.fit(parts, land((x, z) -> 65)).reasons());
+	}
+
+	@Test
+	void aStreetSlabUnderTheDoorIsSeenWhereTheTerrainByTheDoorSaysNothing() {
+		// The case the seeds showed (a village of the test battery, a house whose door opened five blocks over the
+		// street in front of it): a terrain_matching street is laid flat at the height of its own anchor column and can
+		// end blocks off the terrain 16 columns later, where a rigid house hangs from it on the height of ITS joint
+		// column (JigsawPlacement, 26.3: a rigid child of a terrain_matching parent is placed on the heightmap, not
+		// aligned to the parent). The terrain by the door is flat and equal on both columns, so the two generation
+		// heights the pass used to compare say there is no step at all; the boxes say five.
+		BoundingBox street = new BoundingBox(10, 62, 2, 25, 67, 8);      // a villager walks along it on row 63
+		BoundingBox house = new BoundingBox(14, 68, -6, 20, 78, 1);      // its floor row, five over the street
+		TerrainFit.Result r = TerrainFit.fit(village(street, house), land((x, z) -> 68));
+		assertArrayEquals(new Reason[] {Reason.KEPT, Reason.KEPT, Reason.DOOR_STEP, Reason.PARENT}, r.reasons());
+		assertTrue(r.summary().contains("1 buildings with a step at the door"), r.summary());
 	}
 
 	@Test
@@ -208,7 +237,7 @@ class TerrainFitTest {
 	@Test
 	void summaryCountsEveryReason() {
 		// a door too far above the street: the house and its villager go
-		TerrainFit.Result r = TerrainFit.fit(village(), land((x, z) -> z <= 2 && x >= 14 && x <= 20 ? 70 : 65));
+		TerrainFit.Result r = TerrainFit.fit(village(STREET.moved(0, -5, 0), HOUSE), land((x, z) -> 65));
 		assertEquals(2, r.count(Reason.KEPT));
 		assertEquals(1, r.count(Reason.DOOR_STEP));
 		assertEquals(1, r.count(Reason.PARENT));
