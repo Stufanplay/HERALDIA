@@ -115,7 +115,7 @@ def main():
     ctx = s.Context(proc, lines, seen)
     try:
         s.wait_for(lines, r"Heraldia: (\d+) estructuras registradas", s.START_TIMEOUT_S, seen)
-        ctx.run("gamerule spawn_mobs false", r"Gamerule|set to|now")
+        ctx.run("gamerule spawn_mobs false", r"Gamerule|set to")   # NOT "now": it is inside "Unknown"
         m = ctx.run(f"execute positioned {FROM[0]} 64 {FROM[1]} run locate structure #heraldia:medianas/{MID}",
                     r"is at \[(-?\d+), [^,]+, (-?\d+)\]|Could not find")
         if not m.group(1):

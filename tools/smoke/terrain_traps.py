@@ -47,6 +47,9 @@ def ground(world, x0, x1, y0, y1, z0, z1):
     b = saved_world.blocks(world, x0, x1, y0, y1, z0, z1)
     g = _paths.Ground.__new__(_paths.Ground)
     g.lint, g._floor, g._nb = lint, {}, {}
+    # `base` says where a TEMPLATE's layer 0 sits (_paths.START_BASE, #86); here the heights are the world's own, so it
+    # means nothing and no method of Ground reads it. Set all the same, so this stays a whole Ground.
+    g.base = 0
     g.b = {p: spell(st) for p, st in b.items() if not st.endswith(PLANTS)}
     g.box = (x0, z0, x1 + 1, z1 + 1)
     return g, len(b)
