@@ -31,6 +31,12 @@ generation cost (`generation_cost.py`) or the play cost (`runtime_cost.py`). Tho
 Write a test for what you fix, and prefer a unit test over a server test whenever both can see the
 defect: the unit test is what will still run per session.
 
+When only a server test can see the defect — it needs a world, a seed or a running server — say so in
+the PR. The per-session net for that defect is **partial by nature**: the unit test covers the decision,
+and the regression itself would only appear in `pre-production`. First case recorded: the inhabitant
+lost in the terrain (#91), where `InhabitantsTest` covers `Inhabitants.rescue` (the 16-block line and the
+guards) but only `tools/smoke/inhabitant_lost.py` finds the trap the seed's terrain makes.
+
 ## Standing constraints
 
 - **Never to `main`** without the owner's approval. Never touch `.github/workflows/publish.yml`.
