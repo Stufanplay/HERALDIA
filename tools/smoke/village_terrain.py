@@ -28,6 +28,7 @@ import argparse, glob, io, json, os, queue, re, struct, subprocess, sys, threadi
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "gen"))
 import server_smoke as s
+import ground_blocks
 import nbtlib
 from themes import FAMILIES
 
@@ -395,15 +396,14 @@ FIT_GRADE_OK = 0.85       # share of grading points whose ground is where it was
 FIT_DOORS_OK = 0.9        # share of buildings whose door is within a step of its street
 FIT_MAX_TREES = 10        # natural trunks left on the pieces (the forest villages had 60-170 before the clearing)
 SOIL = ("grass_block", "dirt", "podzol", "mud", "coarse_dirt", "rooted_dirt", "moss_block", "snow_block", "mycelium")
-NOT_GROUND = ("leaves", "_log", "vine", "bamboo", "mushroom", "cocoa", "snow", "_sapling")
 
 
 def _is_ground(name):
-    """Does this block count as ground? (vegetation and air do not; water does)"""
-    if name in AIR_BLOCK and name != "minecraft:water" or any(v in name for v in NOT_GROUND):
-        return False
-    return not name.endswith(("_carpet", "torch", "_sign", "_button", "pressure_plate", "rail", "flower", "_tulip",
-                              "poppy", "dandelion", "bush", "leaf_litter", "petals"))
+    """Does this block count as ground? (vegetation and air do not; water does.) Decided from the 26.3 registry by
+    `ground_blocks.is_ground`: a collision box above 1/8 of a block, and not in the registry's tags for trees and
+    plants (#98). The lists of names it replaces let 123 blocks with no collision box through as ground, among them
+    12 of the 13 plants #98 found (blue orchids, sugar cane, wildflowers...; one flower is the whole ±1 tolerance)."""
+    return ground_blocks.is_ground(name)
 
 
 def ground(blocks, x, z, top):
