@@ -611,7 +611,10 @@ def fit_figures(blocks, pieces, bad_doors=None, highest=None):
     return (g_ok, g_n), (d_ok, d_n), trunks
 
 
-def terrain_fit(jar, work, fails, measure):
+def terrain_fit(jar, work, fails, measure, seed=FIT_SEED):
+    """The terrain fit of the village nearest the origin of a world on `seed` (`FIT_SEED` by default: what the battery
+    has always measured). The seed is a parameter because the door figure of one world is one sample of a figure about
+    terrain, and the defects it finds live on hillsides a single seed may not have (#96)."""
     launcher = s.prepare(work, jar, s.gradle_properties())
     with open(os.path.join(work, "config", "heraldia.json")) as f:
         cfg = json.load(f)
@@ -621,7 +624,7 @@ def terrain_fit(jar, work, fails, measure):
         json.dump(cfg, f)
     props = os.path.join(work, "server.properties")
     with open(props) as f:
-        text = re.sub(r"level-seed=.*", f"level-seed={FIT_SEED}", f.read())
+        text = re.sub(r"level-seed=.*", f"level-seed={seed}", f.read())
     with open(props, "w") as f:
         f.write(text)
     proc, ctx = start_server(work, launcher, ["-Dheraldia.depurar.puerto=true", "-Dheraldia.perfil=true"])
@@ -654,8 +657,8 @@ def terrain_fit(jar, work, fails, measure):
     blocks = read_blocks(world, x - FIT_RADIUS - 16, z - FIT_RADIUS - 16, x + FIT_RADIUS + 16, z + FIT_RADIUS + 16)
     bad, highest = [], {}
     (g_ok, g_n), (d_ok, d_n), trunks = fit_figures(blocks, pieces, bad, highest)
-    print(f"fit: {sid} at {x} {z}: {len(pieces)} pieces; ground at {g_ok} of {g_n} grading points; {d_ok} of {d_n} doors "
-          f"within a step of their street; {trunks} natural trunks on the pieces")
+    print(f"fit: seed {seed}: {sid} at {x} {z}: {len(pieces)} pieces; ground at {g_ok} of {g_n} grading points; "
+          f"{d_ok} of {d_n} doors within a step of their street; {trunks} natural trunks on the pieces")
     share = lambda a, n: f"{a / n:.3f}" if n else "-"
     print(f"fit: doors within a step: {d_ok} of {d_n} ({share(d_ok, d_n)}, the gate: the street under any piece on it) "
           f"| {highest['ok']} of {highest['n']} ({share(highest['ok'], highest['n'])}, the highest block of the street "
@@ -679,7 +682,7 @@ def terrain_fit(jar, work, fails, measure):
         fails.append(f"fit: {trunks} trees of world generation on the village pieces (at most {FIT_MAX_TREES})")
 
 
-def main():
+def parser():
     ap = argparse.ArgumentParser()
     ap.add_argument("--jar", required=True)
     ap.add_argument("--work", default=os.path.join(s.ROOT, "build", "smoke-aldeas"))
@@ -687,11 +690,17 @@ def main():
     ap.add_argument("--only-natural", action="store_true")
     ap.add_argument("--only-fit", action="store_true")
     ap.add_argument("--seeds", nargs="*", default=NATURAL_SEEDS)
-    a = ap.parse_args()
+    # the seed of the terrain fit phase (`--seeds` is the coastal phase's): what the battery runs is the default
+    ap.add_argument("--fit-seed", default=FIT_SEED)
+    return ap
+
+
+def main():
+    a = parser().parse_args()
     os.makedirs(a.work, exist_ok=True)
     fails = []
     # a new world with only the forest and taiga families: the terrain fit in natural generation
-    terrain_fit(os.path.abspath(a.jar), a.work, fails, a.measure)
+    terrain_fit(os.path.abspath(a.jar), a.work, fails, a.measure, a.fit_seed)
     if a.only_fit:
         print("VILLAGES AND TERRAIN:", "OK" if not fails else fails)
         return 1 if fails and not a.measure else 0

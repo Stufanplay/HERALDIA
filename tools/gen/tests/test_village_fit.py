@@ -172,3 +172,13 @@ def test_the_measured_column_stays_inside_the_parent():
     assert _doors(blocks, [narrow, HOUSE]) == ((1, 1), (0, 1))
     read = {}
     assert vt.street_step(blocks, 4, -1, 10, [], read) == (0, 9)
+
+
+# ---------------------------------------------------------------- the seed of the fit phase
+def test_the_fit_phase_takes_a_seed_and_its_default_is_the_one_the_battery_runs():
+    """The door figure of one world is one sample of a figure about terrain, so the fit phase takes a seed; what the
+    battery runs must not move, so the default is `FIT_SEED` and `--seeds` (the coastal phase's) is untouched."""
+    a = vt.parser().parse_args(["--jar", "x.jar"])
+    assert a.fit_seed == vt.FIT_SEED == "heraldia"
+    assert a.seeds == vt.NATURAL_SEEDS
+    assert vt.parser().parse_args(["--jar", "x.jar", "--fit-seed", "s4"]).fit_seed == "s4"
