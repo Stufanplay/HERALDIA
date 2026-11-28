@@ -10,9 +10,16 @@ Three branches, in this order, and nothing skips a step:
    `develop`, merged back into `develop`). **Work stays in `develop` until the owner says to promote it.**
    **CI does not run on `develop`**: no pull_request and no push trigger (`.github/workflows/ci.yml`).
    Merging into `develop` therefore never waits for CI.
-2. **`pre-production` — where CI has to pass.** Permanent branch, never deleted. The owner says when
-   `develop` is promoted into it. CI runs on every push to `pre-production` and on every PR against it,
-   and **the full battery has to be green here**. This is the only place the heavy tests run.
+2. **`pre-production` — where CI has to pass.** Permanent branch, never deleted. CI runs on every push
+   to `pre-production` and on every PR against it, and **the full battery has to be green here**. This is
+   the only place the heavy tests run.
+   **When to promote is the orchestrator's call to propose** (the owner's decision, 28-Nov-2026): it
+   judges when `develop` is at a good point, says so with what is going in, and **the owner confirms or
+   says to wait**. Nothing is promoted without that confirmation. Promote **often and in small batches**:
+   with no CI on `develop`, a big promotion turns one red job into a hunt across many changes. Good
+   moments to propose: a self-contained piece of work has landed and the tree is quiet; several small
+   fixes have piled up; something touched shared code (`_common/`, the generator, `build.gradle`, CI,
+   resources) and nothing has exercised it yet; or the last promotion is days behind.
 3. **`main` — release.** Only `pre-production` goes into `main`, **only with the owner's explicit
    approval**, and only when `pre-production` is green. Never push to `main` on your own initiative.
    `.github/workflows/publish.yml` lives on `main` and is never modified.
