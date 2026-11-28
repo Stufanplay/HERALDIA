@@ -44,6 +44,11 @@ and the regression itself would only appear in `pre-production`. First case reco
 lost in the terrain (#91), where `InhabitantsTest` covers `Inhabitants.rescue` (the 16-block line and the
 guards) but only `tools/smoke/inhabitant_lost.py` finds the trap the seed's terrain makes.
 
+## Sessions
+
+**One at a time** (the owner's decision, 28-Nov-2026): the orchestrator does not start a session until
+the previous one has finished. No parallel fan-out, whatever the queue looks like.
+
 ## Standing constraints
 
 - **Never to `main`** without the owner's approval. Never touch `.github/workflows/publish.yml`.
