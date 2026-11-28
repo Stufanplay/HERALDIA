@@ -52,7 +52,7 @@ def main():
         log = ctx.log()
         check(re.search(SUGGESTION, log), "first start: no suggestion line in the log")
         check(not re.search(SEAMS, log), "first start: seam warning in a new world")
-        ctx.run("tick sprint 1300", r"[Ss]print|ticks|Unknown")
+        ctx.run("tick sprint 1300", r"[Ss]print|ticks")
         end = time.monotonic() + s.TICK_TIMEOUT_S
         while ctx.gametime() < 1250:
             if time.monotonic() > end:

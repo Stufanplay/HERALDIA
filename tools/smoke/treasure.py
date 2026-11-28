@@ -109,7 +109,7 @@ def chest_loot(srv, fails, with_it):
     ctx = srv.ctx
     for tbl in ("heraldia:minas/boca", "heraldia:medianas/posada/cuarto"):
         ctx.run(f"clear {P} minecraft:paper", r"Removed|No items")
-        ctx.run(f"loot give {P} loot {tbl}", r"Dropped|Gave|No items|Unknown")
+        ctx.run(f"loot give {P} loot {tbl}", r"Dropped|Gave|No items")
         has = ctx.test(f"execute if items entity {P} container.* minecraft:paper[minecraft:custom_data~{{{MARK}:{{}}}}]")
         if has != with_it:
             fails.append(f"loot: {tbl} {'does not give' if with_it else 'gives'} the fragment with tesoro.probabilidad = {100 if with_it else 0}")
@@ -225,7 +225,7 @@ def main():
                     wait_loaded(srv, t["x"] + dx, t["z"] + dz)
             if attempt == 0:
                 ctx.run(f"execute positioned {t['x']} 0 {t['z']} positioned over motion_blocking_no_leaves run "
-                        f"fill ~-{HOUSE} ~ ~-{HOUSE} ~{HOUSE} ~2 ~{HOUSE} minecraft:oak_planks hollow", r"Successfully filled|No blocks|Unknown|Incorrect")
+                        f"fill ~-{HOUSE} ~ ~-{HOUSE} ~{HOUSE} ~2 ~{HOUSE} minecraft:oak_planks hollow", r"Successfully filled|No blocks")
             before = len(CHEST_TABLE.findall(ctx.log()))
             use(srv)
             n = chain(srv)

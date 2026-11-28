@@ -123,7 +123,7 @@ def main():
         # call finalizeSpawn, so it comes out as is)
         ctx.run(f'summon minecraft:zombie 400 {y + 1} 400 {{IsBaby:1b,PersistenceRequired:1b,NoAI:1b,Tags:["{ZOMBIE}"],'
                 f'CustomName:{{translate:"heraldia.unicas.castillo.guardian",fallback:"Sir Aldric"}}}}',
-                r"Summoned|Unable|Invalid")
+                r"Summoned new")
         check(ctx.until(f"execute if entity @e[tag={ZOMBIE},tag=heraldia_anclado,tag=heraldia_guardian,tag=heraldia_adulto]"),
               "el arreglo «marcas» no ha puesto las etiquetas al guardián antiguo")
         check(ctx.test(f"execute if entity @e[tag={ZOMBIE},nbt={{IsBaby:0b}}]"), "el arreglo «bebes» no ha hecho adulto al guardián")
@@ -234,7 +234,7 @@ def main():
         check(re.search(rf"panel de configuración abierto \({PLAYER}, principal\)", "".join(ctx.seen)), "/heraldia config no abre el diálogo")
         ctx.run(f"execute as {PLAYER} run heraldia config menu combate", rf"abierto \({PLAYER}, combate\)|Unknown|Incorrect")
         check(re.search(rf"abierto \({PLAYER}, combate\)", "".join(ctx.seen)), "/heraldia config menu combate no abre el submenú")
-        ctx.run("heraldia config set arena.max_mobs_vivos 30", r"guardadas por|Valor no válido")
+        ctx.run("heraldia config set arena.max_mobs_vivos 30", r"guardadas por")
         with open(os.path.join(a.work, "config", "heraldia.json"), encoding="utf-8") as f:
             check(json.load(f).get("arena", {}).get("max_mobs_vivos") == 30, "config set no ha escrito el fichero")
         ctx.run(f"execute as {PLAYER} run heraldia language fr_fr", rf"idioma de {PLAYER}: fr_fr|Unknown|Incorrect")

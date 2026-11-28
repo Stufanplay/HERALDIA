@@ -304,7 +304,7 @@ def main():
         check(not diff, "apply changed chunks outside the plan: " + "; ".join(diff[:3]))
         print(f"apply: {len(changed)} chunks of the zone changed, {len(changed - allowed)} outside the plan")
         n0 = len(ctx.seen)
-        ctx.run("heraldia update undo", r"update undo confirm|No hay")
+        ctx.run("heraldia update undo", r"update undo confirm")
         m = re.search(r"update undo confirm (\w+)", "".join(ctx.seen[n0:]))
         check(m and m.group(1) == ident, f"undo does not offer the plan {ident}: {m and m.group(0)}")
         s.send(proc, f"heraldia update undo confirm {ident}")

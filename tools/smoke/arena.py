@@ -169,6 +169,7 @@ def first_start(p, pl):
     ctx.run("heraldia arena remove", r"Se quitará la arena|will be removed")
     ctx.run("heraldia arena remove confirm", r"arena: quitada de|arena: obra terminada")
     p.check(p.wait_log(r"arena: quitada de"), "no se quita la arena")
+    # the refusal is the expected reply: the arena was just removed, so there is no proposal to confirm
     ctx.run("heraldia arena place confirm", r"Primero pide un sitio|First ask for a site")
     # place: proposal and confirmation
     m = ctx.run("heraldia arena place", r"arena: sitio propuesto en (-?\d+) (-?\d+) (-?\d+) \(a (\d+) bloques")
@@ -179,6 +180,7 @@ def first_start(p, pl):
     box = alone[3:]
     p.check(re.findall(r"arena: colocada en .*\(caja ([-\d ]+) a", ctx.log())[-1].split() == [str(c) for c in box[:3]],
             "la arena colocada a mano no está donde la generada (la búsqueda es determinista)")
+    # the refusal is the expected reply: the generated arena is still there
     ctx.run("heraldia arena place", r"Ya hay una arena en|There is already an arena")
     minx, miny, minz, maxx, maxy, maxz = box
     ctx.run(f"forceload add {minx - 16} {minz - 16} {maxx + 16} {maxz + 16}", r"Marked|force|already")
@@ -373,7 +375,9 @@ def second_start(p, pl, box):
 def herald_house(p, hp, arena_box):
     """The Herald's House in this (no longer new) world: placed by an operator, protected, its portal, its market."""
     ctx = p.ctx
+    # the refusal is the expected reply: the house has not been placed yet
     ctx.run("heraldia herald", r"no Herald's House yet|aún no tiene Casa del Heraldo")
+    # the refusal is the expected reply: nothing has been proposed yet
     ctx.run("heraldia herald place confirm", r"There is no proposal|No hay ninguna propuesta")
     ctx.run("heraldia herald place", r"Looking for a site|Buscando sitio")
     m = p.wait_log(r"herald's house: site at (-?\d+) (-?\d+) (-?\d+) \((\d+) blocks from spawn", timeout=120)
@@ -415,9 +419,9 @@ def herald_house(p, hp, arena_box):
     if sq:
         cx, cy, cz = o[0] + sq[0] + sq[3] // 2, o[1] + sq[1] + 1, o[2] + sq[2] + sq[3] // 2
         ctx.run(f"execute positioned {cx} {cy} {cz} run heraldia event start market",
-                r"starts in|Empieza el evento|not started|no cabe|No hay|There is no|room|no hay sitio")
+                r"starts in|Empieza el evento")
         p.check(p.wait_log(r"events: event \d+ starts: market in", timeout=30), "herald: no market day on the plaza")
-        ctx.run("heraldia event stop all", r"stopped|parad|[Ee]vent")
+        ctx.run("heraldia event stop all", r"Events stopped|Eventos parados")
     if SETTLE:
         settle(p, b, res)
     # protection: a creative player who is not an operator
@@ -455,7 +459,7 @@ def herald_house(p, hp, arena_box):
     ctx.ticks(2)
     ctx.run(f"clear {P}", r"Removed|No items")
     ctx.run(f"give {P} minecraft:emerald 10", r"Gave")
-    ctx.run(f"execute as {P} run heraldia herald stall claim 1", r"Stall 1 is yours|El puesto 1 es tuyo|need|Hacen falta")
+    ctx.run(f"execute as {P} run heraldia herald stall claim 1", r"Stall 1 is yours|El puesto 1 es tuyo")
     p.check(p.wait_log(rf"stall 1 claimed by {P} for 3 emeralds", timeout=30), "herald: stall 1 is not claimed")
     p.check(ctx.test(f'execute if entity @a[name={P},nbt={{Inventory:[{{id:"minecraft:emerald",count:7}}]}}]'),
             "herald: claiming does not take entry fee + first rent (3 emeralds)")
@@ -473,7 +477,7 @@ def herald_house(p, hp, arena_box):
                 "herald: the tenant's chest is not in the return barrel")
         p.check(ctx.block(box, "minecraft:air"), "herald: the stall is not emptied")
     ctx.run("tick sprint stop", r"[Ss]print|sprint|No")
-    ctx.run("heraldia herald stall", r"Market stalls|Puestos del mercado")
+    ctx.run("heraldia herald stall", r"Market stalls:|Puestos del mercado:")
     # trampling: a 3-block drop onto the house's farmland (HeraldFarmlandMixin), and onto farmland far away (control)
     s.send(ctx.proc, f"gamemode survival {P}")
     ctx.ticks(2)

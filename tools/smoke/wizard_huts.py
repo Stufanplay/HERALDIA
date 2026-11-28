@@ -75,7 +75,7 @@ def place(ctx, c):
     ctx.run(f"forceload add {x - 16} {z - 16} {x + 32} {z + 32}", r"Marked|[Aa]dded|force|already")
     ctx.until(f"execute if loaded {x} {Y} {z}")
     ctx.run(f"fill {x} {Y - 1} {z} {x + 16} {Y - 1} {z + 16} minecraft:stone", r"Successfully filled|No blocks")
-    ctx.run(f"place template heraldia:medianas/choza_mago/{TEMPLATE[c]} {x} {Y} {z}", r"Loaded template|Failed")
+    ctx.run(f"place template heraldia:medianas/choza_mago/{TEMPLATE[c]} {x} {Y} {z}", r"Loaded template")
     return ctx.wait_entity(f"@e[tag={WIZARD},{box(c)}]")
 
 

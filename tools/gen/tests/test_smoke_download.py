@@ -299,7 +299,7 @@ class _Ctx:
     def __init__(self, reply):
         import queue
         self.lines, self.seen = queue.Queue(), []
-        self.server = _Server(self.lines, reply)
+        self.server = self.proc = _Server(self.lines, reply)
 
     def run(self, cmd, ok):
         return s.run(self.server, self.lines, self.seen, cmd, ok)
@@ -318,3 +318,20 @@ def test_require_carpet_stops_the_test_and_says_where_carpet_is_missing():
     msg = str(e.value)
     assert "Carpet is not loaded" in msg and "mods/" in msg and "Unknown or incomplete command" in msg
 
+
+# `place here` answers only the player: on the console only `place confirm` answers (texts from the mod's en_us).
+HERALD_BUILDING = "[03:10:00] [Server thread/INFO]: System chat: Building the Herald's House at 0 91 48…\n"
+HERALD_NO_PROPOSAL = "[03:10:00] [Server thread/INFO]: System chat: There is no proposal: use /heraldia herald place first\n"
+
+
+def test_place_herald_here_sends_both_orders_and_takes_the_build():
+    ctx = _Ctx(HERALD_BUILDING)
+    s.place_herald_here(ctx, "rep")
+    assert ctx.server.sent == ["execute as rep run heraldia herald place here\n",
+                               "execute as rep run heraldia herald place confirm\n"]
+
+
+def test_place_herald_here_stops_the_test_on_a_refusal_at_once():
+    with pytest.raises(SystemExit) as e:
+        s.place_herald_here(_Ctx(HERALD_NO_PROPOSAL), "rep")
+    assert "refused" in str(e.value) and "There is no proposal" in str(e.value)

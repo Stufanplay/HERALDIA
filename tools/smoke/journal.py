@@ -106,7 +106,7 @@ def chronicle(srv, by_dimension, lang):
         before = len(re.findall(rf"Heraldia: chronicle: {sid} fell", ctx.log()))
         ctx.run(f'summon minecraft:zombie {X} {Y} {Z + 2} {{NoAI:1b,Tags:["heraldia_guardian","heraldia_guardian.{sid}"]}}',
                 r"Summoned new|Unable")
-        ctx.run(f"damage @e[tag=heraldia_guardian.{sid},limit=1] 1000 minecraft:player_attack by {who}", r"Applied|No entity|Unable|Unknown|Incorrect")
+        ctx.run(f"damage @e[tag=heraldia_guardian.{sid},limit=1] 1000 minecraft:player_attack by {who}", r"Applied|No entity|Unable")
         end = time.monotonic() + 30
         while len(re.findall(rf"Heraldia: chronicle: {sid} fell", ctx.log())) <= before and time.monotonic() < end:
             ctx.ticks(10)
@@ -119,7 +119,7 @@ def chronicle(srv, by_dimension, lang):
     # every guardian but the last one, by advancement (what a kill before this version left)
     for sid in main_ids:
         if sid != last:
-            ctx.run(f"advancement grant {PLAYER} only heraldia:unicas/{sid}/guardian", r"Granted|granted|Couldn't|Unknown|No ")
+            ctx.run(f"advancement grant {PLAYER} only heraldia:unicas/{sid}/guardian", r"Granted|granted|Couldn't|No ")
     text = ask(srv, "heraldia journal chronicle", CHRONICLE_END)
     if f"Defeated ({n - 1}):" not in text or f"Still keeping watch (1): {lang[f'heraldia.unicas.{last}.nombre']}" not in text:
         fails.append(f"chronicle: after {n - 1} guardian advancements: {text[-1200:]}")
@@ -153,7 +153,7 @@ def chronicle(srv, by_dimension, lang):
     # beyond the map: the Nether by advancement, the End by a kill
     if beyond:
         for sid in by_dimension["nether"]:
-            ctx.run(f"advancement grant {PLAYER} only heraldia:unicas/{sid}/guardian", r"Granted|granted|Couldn't|Unknown|No ")
+            ctx.run(f"advancement grant {PLAYER} only heraldia:unicas/{sid}/guardian", r"Granted|granted|Couldn't|No ")
         for sid in by_dimension["end"]:
             kill(sid, PLAYER)
         ctx.ticks(10)
@@ -173,7 +173,7 @@ def chronicle(srv, by_dimension, lang):
     # the old-world path: every guardian advancement held before joining, the end on joining
     srv.spawn(VETERAN)
     for sid in main_ids:
-        ctx.run(f"advancement grant {VETERAN} only heraldia:unicas/{sid}/guardian", r"Granted|granted|Couldn't|Unknown|No ")
+        ctx.run(f"advancement grant {VETERAN} only heraldia:unicas/{sid}/guardian", r"Granted|granted|Couldn't|No ")
     if advancement(VETERAN, "cronica/final"):
         fails.append("chronicle: granting advancements by command closed it without a death or a join (it should wait)")
     srv.leave(VETERAN)
@@ -231,7 +231,7 @@ def main():
         if first["nether_medium"]:
             grants.append(f"only heraldia:medianas/nether {first['nether_medium']}")
         for g in grants:
-            ctx.run(f"advancement grant {PLAYER} {g}", r"Granted|granted|Couldn't|Unknown|Incorrect|No ")
+            ctx.run(f"advancement grant {PLAYER} {g}", r"Granted|granted|Couldn't|No ")
         text = ask(srv, "heraldia journal", OVERVIEW_END)
         got = counts(text)
         for sec in ("villages", "uniques", "mediums", "mines", "coast") + (("nether",) if first["nether_medium"] else ()):

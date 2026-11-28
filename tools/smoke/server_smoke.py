@@ -329,6 +329,24 @@ def require_carpet(ctx):
     ctx._carpet_checked = True
 
 
+# `heraldia herald place here` answers the player who runs it, not the source of the command: its proposal goes to the
+# player's chat with sendSystemMessage, so the console that a server test reads sees nothing when it works -- only its
+# refusals, which do go to the source. So it is sent without a wait, and `place confirm` is the wait: its success, or
+# the refusal of either order (listed so the wait ends at once on one), and only the success is accepted.
+HERALD_PLACED = r"Building the Herald's House|Construyendo la Casa del Heraldo"
+HERALD_REFUSED = (r"There is no proposal|No hay ninguna propuesta|Herald's House is disabled|Casa del Heraldo está desactivada"
+                  r"|Herald's House is being built|Casa del Heraldo se está construyendo|already has its Herald's House"
+                  r"|ya tiene su Casa del Heraldo|No site within|No hay sitio a menos")
+
+
+def place_herald_here(ctx, who):
+    """The Herald's House proposed at `who`'s block and confirmed; stops the test on a refusal, saying which."""
+    send(ctx.proc, f"execute as {who} run heraldia herald place here")
+    m = ctx.run(f"execute as {who} run heraldia herald place confirm", f"{HERALD_PLACED}|{HERALD_REFUSED}")
+    if not re.search(HERALD_PLACED, m.string):
+        raise SystemExit(f"herald place here/confirm for {who} was refused: {m.string.strip()[-200:]}")
+
+
 # Condition waits of the server tests: the check is repeated for up to UNTIL_S seconds (generous: CI is
 # slow and writes "Can't keep up!") and passes as soon as it is met. The "wait for time to pass" waits (a circuit
 # must NOT react, a trap has already fired) are counted in game ticks with /time query gametime, not in seconds:

@@ -408,7 +408,8 @@ class Pass:
     # --- players
     def player(self, name, x, z, mode="creative"):
         c = self.ctx
-        c.run(f"player {name} spawn at {x + 0.5} 200 {z + 0.5}", r"joined the game|Unknown|Incorrect")
+        s.require_carpet(c)
+        c.run(f"player {name} spawn at {x + 0.5} 200 {z + 0.5}", r"joined the game")
         c.until(f"execute if entity @a[name={name}]")
         s.send(c.proc, f"gamemode {mode} {name}")          # no reply if it already is in that mode
         if not c.until(f"execute if entity @a[name={name},gamemode={mode}]", timeout=30):
@@ -431,7 +432,7 @@ class Pass:
     def nobody(self):
         for p in PLAYERS:
             if self.ctx.test(f"execute if entity @a[name={p}]"):
-                self.ctx.run(f"player {p} kill", r"left the game|Unknown|Incorrect")
+                self.ctx.run(f"player {p} kill", r"left the game")
 
     # --- measurement
     def window(self, seconds, during=None):
@@ -504,7 +505,8 @@ class Pass:
                 cx, cz = box[0] + bp.get("centro", [28, 1, 28])[0], box[2] + bp.get("centro", [28, 1, 28])[2]
                 self.player(PLAYERS[1], cx, cz, mode="survival")
                 c.run(f"tp {PLAYERS[1]} {cx + 0.5} {box[1] + 1} {cz + 0.5}", r"Teleported")
-                c.run("heraldia arena start", r"Prepárate|Get ready|Unknown|Incorrect|already|ya hay")
+                # the refusal is the expected reply: "already in progress" means a match is on, the state this scenario measures
+                c.run("heraldia arena start", r"Prepárate|Get ready|already in progress|Ya hay una partida")
 
                 def during():
                     c.run(f"damage @e[tag=heraldia_arena,limit=1,sort=random] 1000 minecraft:player_attack by {PLAYERS[1]}",
@@ -525,12 +527,13 @@ class Pass:
             out["heraldia_caravana"] = c.count("@e[tag=heraldia_caravana]")
             out["heraldia_habitantes"] = c.count("@e[tag=heraldia_habitante]")
             if sc == "aldea_arena":
-                c.run("heraldia arena stop", r"arena|Arena|No hay|There is no")
+                # the refusal is the expected reply: "No match" when the match already ended on its own during the window
+                c.run("heraldia arena stop", r"match stopped|Partida de la arena detenida|No match|Sin partida")
             if sc == "caravana":
                 c.run("kill @e[tag=heraldia_caravana]", r"Killed|No entity")
             if sc in ("aldea_evento", "dos_aldeas_evento"):
                 out["heraldia_evento"] = c.count("@e[tag=heraldia_evento]")
-                c.run("heraldia event stop all", r"Events stopped|Eventos parados|Unknown|Incorrect")
+                c.run("heraldia event stop all", r"Events stopped|Eventos parados")
         print(f"{'CON' if self.with_it else 'SIN'} {sc}: media {_f(st.get('media'))}, p50 {_f(st.get('p50'))}, p95 {_f(st.get('p95'))}, "
               f"p99 {_f(st.get('p99'))}, peor {_f(st.get('max'))} ms, {st['ticks']} ticks ({_f(st.get('tps'))} TPS); "
               f"entidades {out['entidades']}", flush=True)
@@ -549,7 +552,7 @@ class Pass:
         c = self.ctx
         if not hasattr(self, "_arena_box"):
             m = c.run("heraldia arena place", SITE.pattern + r"|Ya hay una arena|There is already")
-            c.run("heraldia arena place confirm", r"Colocando la arena en|Building the arena at|Primero|First")
+            c.run("heraldia arena place confirm", r"Colocando la arena en|Building the arena at")
             m = s.wait_for(self.lines, PLACED.pattern, 600, self.seen)
             self._arena_box = tuple(int(g) for g in m.groups()[3:])
             s.wait_for(self.lines, r"arena: obra terminada", 600, self.seen)
