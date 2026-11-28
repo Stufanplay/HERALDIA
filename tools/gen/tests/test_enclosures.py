@@ -74,3 +74,38 @@ def test_farms_and_the_cloister_library_let_their_villager_out():
         assert [st for st in _gates(t).values()] and all("open=true" in st for st in _gates(t).values()), th["id"]
         assert enclosures.issues(t) == [], th["id"]
     assert n >= 100
+
+
+def plateau():
+    """A piece joined at y = 1 (its layer 0 a foundation at the ground's height): a villager on a block three
+    high, fenced on its south side, where a shut gate opens onto steps down. Its other sides are a drop of 3 to the
+    street, which the search takes."""
+    t = Template("t/specials/plateau")
+    for x in range(5):
+        for z in range(8):
+            t.set(x, 0, z, "stone")
+    for x in range(5):
+        for z in range(5):
+            for y in (1, 2, 3):
+                t.set(x, y, z, "stone")
+        t.set(x, 4, 4, "oak_fence")
+    t.set(2, 4, 4, "oak_fence_gate[facing=south,in_wall=false,open=false,powered=false]")
+    for y in (1, 2):
+        t.set(2, y, 5, "stone")
+    t.set(2, 1, 6, "stone")
+    t.jigsaw(1, 3, 1, "up_south", "heraldia:slot", "heraldia:bottom", "heraldia:villagers/plains/nobed_farmer",
+             final_state="stone")
+    t.jigsaw(0, 1, 7, "west_up", "heraldia:entrance", "heraldia:street", "heraldia:empty")
+    return t
+
+
+def test_the_street_is_at_the_height_of_the_jigsaw_that_joins_the_piece():
+    """#86: with the ground modelled at y = -1, a block below the piece's foundation, the plateau's sides were a drop
+    of 4, which the search never takes, and the gate looked like the only way down."""
+    t = plateau()
+    assert enclosures.issues(t) == []
+    for x in range(5):
+        for z in range(4):
+            if x in (0, 4) or z == 0:
+                t.set(x, 4, z, "oak_fence")
+    assert [m for m, _ in enclosures.issues(t)] == [MSG], "fenced all round, the gate is the only way out again"

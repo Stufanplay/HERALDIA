@@ -165,3 +165,47 @@ def test_every_village_ladder_of_a_style_is_shut_and_the_audit_is_clean(th):
                 for p in c["cells"]:
                     assert "fence_gate" in t.get(*p) and "open=false" in t.get(*p), (n, p)
     assert withlad >= 4, f"{th['id']}: only {withlad} pieces with a shut ladder"
+
+
+def raised(rungs=4):
+    """A piece joined at y = 1, as a well is: the jigsaw lands where the street's walkers have their feet, so its layer
+    0 is the ground's own height and holds nothing but the foot of a pillar; the path it lays in its layer 1 (15/16 of
+    a block) rests on the ground, and on the path a ladder goes up the pillar to a loft. Its column x = 0 is open, with
+    the jigsaw in it, as the well's front row is."""
+    t = Template("t/fillers/toy")
+    for x in range(1, 7):
+        for z in range(7):
+            t.set(x, 1, z, "dirt_path")
+    t.set(3, 0, 3, "stone_bricks")
+    for y in range(1, 2 + rungs):
+        t.set(3, y, 3, "stone_bricks")
+    for y in range(2, 2 + rungs):
+        t.set(2, y, 3, "ladder[facing=west]")
+    for x in range(3, 6):
+        for z in range(2, 5):
+            t.set(x, 1 + rungs, z, "oak_planks")
+    t.jigsaw(0, 1, 3, "west_up", "heraldia:entrance", "heraldia:street", "heraldia:empty")
+    return t
+
+
+def test_a_piece_joined_above_its_layer_0_is_walked_from_the_height_of_its_jigsaw():
+    """The ground around a piece is at the height of the jigsaw that joins it, less one (#86). Modelled at y = -1, as
+    it was for every piece, the path of a well floats a block above the ground, a step of 1.94 that no villager takes:
+    the ladder on it, which strands one, went unseen."""
+    t = raised()
+    assert ladders.level(t) == 1
+    walk = ladders.ground_walk(t)
+    assert (1, 2, 3) in walk, "the path beside the ladder: feet at y = 2, a step of 0.94 from the street"
+    assert [m for m, _ in ladders.issues(t)] == ["escalera de mano que deja al aldeano varado"]
+
+
+def test_the_level_is_the_entrance_or_the_lowest_horizontal_jigsaw():
+    t = raised()
+    t.jigsaws.clear()
+    assert ladders.level(t) == 0, "no jigsaw: placed inside another piece, its own ground is y = -1"
+    t.jigsaw(3, 2, 0, "north_up", "heraldia:street", "heraldia:street", "heraldia:empty")
+    t.jigsaw(3, 1, 6, "south_up", "heraldia:street", "heraldia:street", "heraldia:empty")
+    t.jigsaw(3, 1, 3, "up_south", "heraldia:slot", "heraldia:bottom", "heraldia:empty")
+    assert ladders.level(t) == 1, "a street: its lowest horizontal jigsaw, never one that faces up"
+    t.jigsaw(0, 2, 3, "west_up", "heraldia:entrance", "heraldia:street", "heraldia:empty")
+    assert ladders.level(t) == 2, "the entrance comes first"

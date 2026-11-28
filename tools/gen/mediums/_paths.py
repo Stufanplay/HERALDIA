@@ -21,6 +21,13 @@ import math
 MARGIN = 16                 # flat ground modelled around the template
 FOLLOW_RANGE = 16.0         # a villager's follow_range (26.3 default): the longest walk its search finds
 TRAP_WALK_MAX = 25.0        # longest walk from a trap to its bed: between 24.4 (passed) and 26.1 (failed), see above
+# A medium structure is a start piece: JigsawPlacement.addPieces (26.3) moves it until minY + getGroundLevelDelta() (1)
+# is the first free height of the column, so its layer 0 takes the place of the terrain's top block, and a villager
+# outside has its feet at y = 1 (#86). Measured in a world (tools/probes/wground.py), one structure of each of the six
+# inhabited families: one block outside the box, the terrain's top is level with the layer 0 in 392 of 430 columns;
+# of the rest, 19 are a hillside the inn stands against, 12 a slope down beside the hunters' lodge and 7 plants the
+# probe's reader counts as ground (sugar cane, blue orchids). In none is the terrain one block below as a rule.
+START_BASE = 1
 
 
 def _name(st):
@@ -28,19 +35,22 @@ def _name(st):
 
 
 class Ground:
-    """The template (as a villager sees it: _inhabitants._no_ladders) on flat ground."""
+    """The template (as a villager sees it: _inhabitants._no_ladders) on flat ground, its top at y = `base` - 1: a
+    villager outside the piece has its feet at y = `base`. A village piece is joined at the height of its jigsaw
+    (`ladders.level`: 0 for a house); a medium structure, a start piece, has its layer 0 at the terrain's top
+    (`START_BASE`)."""
 
-    def __init__(self, t, margin=MARGIN):
+    def __init__(self, t, margin=MARGIN, base=0):
         import lint
         from . import _inhabitants as inh
         self.lint = lint
         view = lint.resolved(inh._no_ladders(t))
         self.b = {p: st for p, (st, _) in view.blocks.items() if st and _name(st) not in ("air", "structure_void", "jigsaw")}
         sx, _, sz = t.size()
-        self.box = (-margin, -margin, sx + margin, sz + margin)
+        self.box, self.base = (-margin, -margin, sx + margin, sz + margin), base
         for x in range(-margin, sx + margin):
             for z in range(-margin, sz + margin):
-                self.b.setdefault((x, -1, z), "minecraft:stone")
+                self.b.setdefault((x, base - 1, z), "minecraft:stone")
         self._floor, self._nb = {}, {}
 
     def solid(self, st):
@@ -222,7 +232,7 @@ def trap_walk(t):
     """[(bed, trap, walk)]: for each bed of the template, the worst trap (a cell where the search, run from it, hands back
     a partial path that does not move it) within 16 blocks of the bed in a straight line and near its floor, and the walk
     from it to the bed; (bed, None, 0.0) if there is none."""
-    g = Ground(t)
+    g = Ground(t, base=START_BASE)
     out = []
     for bed in beds(t):
         d = walks(g, bed)
@@ -262,7 +272,7 @@ def stranded(t):
     there it cannot get home or to work, and after 1,200 ticks the game makes it give both up. Seen in CI: the hunters'
     lodge's two inhabitants on top of its lookout, 4 blocks above the ground (a search allows drops of 3 at most)."""
     from . import _inhabitants as inh
-    g = Ground(t)
+    g = Ground(t, base=START_BASE)
     # the beds an inhabitant can use: those its search reaches from where the inhabitants spawn (a bed up a ladder is
     # not one: the watchtower's upper bed, which its search never claims)
     spawn = [tuple(int(v // 1) for v in (x, y, z)) for x, y, z, n in t.entities
