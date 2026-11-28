@@ -136,6 +136,7 @@ def count(p, sel, want, what):
 
 def nothing_left(p, what):
     before = p.times(BUILDING)
+    # the refusal is the expected reply: a second order finds the roads built (or still being built) and must not build again
     p.ctx.run("heraldia herald roads", r"already built|ya están construidos|being built|se están construyendo")
     p.ctx.ticks(40)
     p.check(p.times(BUILDING) == before, f"{what}: /heraldia herald roads built something again")
@@ -192,7 +193,7 @@ def world_a(work, launcher, fails, texts):
     try:
         srv.ctx.ticks(200)
         p.check(p.times(BUILDING) == 0, "A: after restarting, the roads were built on their own")
-        srv.ctx.run("heraldia herald roads", r"Building the roads|Construyendo los caminos|disabled|desactivados|no Herald")
+        srv.ctx.run("heraldia herald roads", r"Building the roads|Construyendo los caminos")
         r = built(p, 1, "A (command, arena first)")
         if r:
             p.check(r["roads"] == 5, f"A: {r['roads']} roads (the four gates' and the arena's)")

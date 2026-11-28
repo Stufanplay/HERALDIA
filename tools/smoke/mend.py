@@ -254,7 +254,7 @@ def phase_old(a, p):
         if not p.check(ctx.until(f"execute if entity @a[name={hs.P}]"), "Carpet's player does not appear"):
             return None
         ctx.run(f"tp {hs.P} {x} {y} {z}", r"Teleported")
-        ctx.run(f"execute as {hs.P} run heraldia herald place here", r"heraldia|Herald|Heraldo|confirm")
+        ctx.run(f"execute as {hs.P} run heraldia herald place here", r"To build it|Para construirla|Proposed site|Sitio propuesto")
         ctx.run(f"execute as {hs.P} run heraldia herald place confirm", r"Building the Herald's House|Construyendo la Casa del Heraldo")
         m = p.wait_log(hs.PLACED, 900)
         if not p.check(m, "the town is not placed"):
@@ -409,7 +409,7 @@ def mend(a, p):
                 ctx.ticks(20)
         if not p.check(c, "apply all does not offer its confirmation"):
             return out
-        ctx.run(f"heraldia update mend apply all confirm {c.group(1)}", r"Repairing|Reparando|no longer|ya no")
+        ctx.run(f"heraldia update mend apply all confirm {c.group(1)}", r"Repairing|Reparando")
         end = time.monotonic() + 900
         while time.monotonic() < end and not any(x.group(1) == "apply" for x in re.finditer(MEND_DONE, ctx.log())):
             ctx.ticks(20)

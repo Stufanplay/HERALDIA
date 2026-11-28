@@ -139,9 +139,10 @@ def world_a(work, launcher, fails, texts):
     try:
         srv.ctx.ticks(200)
         p.check(p.times(BUILDING) == 0, "A: after restarting, the grounds were built on their own")
-        srv.ctx.run("heraldia herald grounds", r"Preparing the Herald's House grounds|Preparando los alrededores|disabled|desactivados")
+        srv.ctx.run("heraldia herald grounds", r"Preparing the Herald's House grounds|Preparando los alrededores")
         check_build(p, 1, "A (command, roads off)")
         before = p.times(BUILDING)
+        # the refusal is the expected reply: a second order finds the grounds prepared (or still being prepared) and must not build again
         srv.ctx.run("heraldia herald grounds", r"already prepared|ya están preparados|being built|construyendo algo")
         srv.ctx.ticks(40)
         p.check(p.times(BUILDING) == before, "A: a second /heraldia herald grounds built something again")

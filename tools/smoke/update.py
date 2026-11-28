@@ -234,7 +234,7 @@ def main():
         check(re.search(rf"panel de configuración abierto \({PLAYER}, principal\)", "".join(ctx.seen)), "/heraldia config no abre el diálogo")
         ctx.run(f"execute as {PLAYER} run heraldia config menu combate", rf"abierto \({PLAYER}, combate\)|Unknown|Incorrect")
         check(re.search(rf"abierto \({PLAYER}, combate\)", "".join(ctx.seen)), "/heraldia config menu combate no abre el submenú")
-        ctx.run("heraldia config set arena.max_mobs_vivos 30", r"guardadas por|Valor no válido")
+        ctx.run("heraldia config set arena.max_mobs_vivos 30", r"guardadas por")
         with open(os.path.join(a.work, "config", "heraldia.json"), encoding="utf-8") as f:
             check(json.load(f).get("arena", {}).get("max_mobs_vivos") == 30, "config set no ha escrito el fichero")
         ctx.run(f"execute as {PLAYER} run heraldia language fr_fr", rf"idioma de {PLAYER}: fr_fr|Unknown|Incorrect")

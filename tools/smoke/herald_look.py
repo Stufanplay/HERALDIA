@@ -135,10 +135,10 @@ class Look:
         self.p.check("no window" in self.status(who), f"{who}'s window does not close when walking away")
 
     def click(self, who, slot, kind="pickup", button=0):
-        self.ctx.run(f"execute as {who} run heraldia choice click {slot} {kind} {button}", r"choice click: slot|unknown input")
+        self.ctx.run(f"execute as {who} run heraldia choice click {slot} {kind} {button}", r"choice click: slot")
 
     def send(self, who, what):
-        self.ctx.run(f"execute as {who} run heraldia choice send {what}", r"choice send: [^\n]*")
+        self.ctx.run(f"execute as {who} run heraldia choice send {what}", r"choice send: [^\n]* in window")
 
 
 def give(ctx, who, item, n=1):
@@ -342,16 +342,16 @@ def run(p, ctx, hp, chests):
         p.check("raw_gold" in L.data(f"entity {P} EnderItems"), "the ender chest does not take the player's item")
     L.close(P)
     # 6. the option off: the chest stays shut, as before
-    ctx.run("heraldia config set casa_heraldo.contenedores_solo_ver false", r"guardadas por|Valor no válido")
+    ctx.run("heraldia config set casa_heraldo.contenedores_solo_ver false", r"guardadas por")
     p.check(not L.open(P, chest), "with the option off the town chest still opens")
-    ctx.run("heraldia config set casa_heraldo.contenedores_solo_ver true", r"guardadas por|Valor no válido")
+    ctx.run("heraldia config set casa_heraldo.contenedores_solo_ver true", r"guardadas por")
     p.check(L.open(P, chest) and "look-only" in L.status(P), "with the option on again the town chest is not look-only")
     L.close(P)
     p.check(L.items(chest) == before, "the town chest changed")
     # 7. the market: a stall of one's own, someone else's, the return barrel
     ctx.run(f"clear {P}", r"Removed|No items")
     give(ctx, P, "minecraft:emerald", 5)
-    ctx.run(f"execute as {P} run heraldia herald stall claim 1", r"Stall 1 is yours|El puesto 1 es tuyo|need|Hacen falta")
+    ctx.run(f"execute as {P} run heraldia herald stall claim 1", r"Stall 1 is yours|El puesto 1 es tuyo")
     p.check(p.wait_log(rf"stall 1 claimed by {P}", timeout=30), "stall 1 is not claimed")
     box = L.w(hp["puestos"][0]["caja"][0])
     ctx.run(f'setblock {box[0]} {box[1]} {box[2]} minecraft:chest{{Items:[{{Slot:0b,id:"minecraft:diamond",count:5}}]}}',
@@ -367,7 +367,7 @@ def run(p, ctx, hp, chests):
     L.close(P)
     p.check(not L.open(Q, box), f"{Q} opens the chest in {P}'s stall")
     L.close(Q)
-    ctx.run("heraldia herald stall evict 1", r"[^\n]*(?:evict|desaloj|[Ss]tall|[Pp]uesto)[^\n]*")
+    ctx.run("heraldia herald stall evict 1", r"cleared stall 1|desalojado el puesto 1|1: free|1: libre")
     m = p.wait_log(rf"stall 1 of {P} reclaimed: (\d+) stacks into (\d+) return barrel", timeout=60)
     if p.check(m, "the evicted stall is not reclaimed into a return barrel"):
         barrels = [L.w(r) for r in hp["devolucion"]]
